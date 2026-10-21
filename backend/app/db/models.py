@@ -1,18 +1,18 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, 
-    String, 
-    Text, 
-    Boolean, 
-    DateTime, 
-    Date, 
-    ForeignKey, 
-    Integer, 
-    BigInteger, 
-    Float, 
-    Numeric, 
-    func
+    Column,
+    String,
+    Text,
+    Boolean,
+    DateTime,
+    Date,
+    ForeignKey,
+    Integer,
+    BigInteger,
+    Float,
+    Numeric,
+    func,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -63,23 +63,20 @@ class Device(Base):
 class Pet(Base):
     __tablename__ = "pets"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    device_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("devices.id", ondelete="SET NULL"),
-        unique=True,
-        nullable=True,
-    )
-    name = Column(String(100), nullable=False)
-    species = Column(String(20), nullable=False)
-    breed = Column(String(100))
-    birth_date = Column(Date)
-    photo_url = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    device_id = Column(UUID(as_uuid=True), ForeignKey("devices.id"), nullable=True)
 
+    name = Column(String, nullable=False)
+    species = Column(String, nullable=False)
+    breed = Column(String, nullable=True)
+    # ¡La línea "age = Column(...)" DEBE ESTAR BORRADA AQUÍ!
+    birth_date = Column(Date, nullable=True)
+    photo_url = Column(String, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relaciones
     owner = relationship("User", back_populates="pets")
     device = relationship("Device", back_populates="pet")
     vaccines = relationship(
@@ -92,15 +89,19 @@ class Pet(Base):
 
 # 4. Modelo de Logs de Ubicación
 class LocationLog(Base):
-    __tablename__ = 'location_logs'
+    __tablename__ = "location_logs"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    device_id = Column(UUID(as_uuid=True), ForeignKey('devices.id', ondelete='CASCADE'), nullable=False)
+    device_id = Column(
+        UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    )
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     altitude = Column(Float, default=0.0)
     battery_level = Column(Integer, nullable=True)
-    recorded_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    recorded_at = Column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
     # Atributo de relación requerido para sincronizar con la clase Device

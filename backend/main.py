@@ -13,18 +13,44 @@ from sqlalchemy import text
 from app.db.session import get_db
 from app.api.v1.endpoints import auth, pets, devices, locations
 
+import asyncio
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from google_location import ejecutar_sincronizacion_google
+
+async def tarea_sincronizacion_continua(intervalo_segundos: int = 180):
+    """Bucle que solicita ubicaciones a Google cada 3 minutos en segundo plano."""
+    await asyncio.sleep(5)  # Espera a que la API inicie completamente
+    while True:
+        print("\n[Auto-Sync] Consultando nuevas ubicaciones a Google Find My...")
+        await asyncio.to_thread(ejecutar_sincronizacion_google)
+        await asyncio.sleep(intervalo_segundos)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Iniciar la tarea automática
+    task = asyncio.create_task(tarea_sincronizacion_continua(intervalo_segundos=180))
+    yield
+    # Cancelar la tarea al detener FastAPI
+    task.cancel()
+
 app = FastAPI(
     title="PetConnect API Core",
     description="API RESTful empresarial para la gestión, geolocalización y salud de mascotas",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
+
+from fastapi.middleware.cors import CORSMiddleware
+
+# ... (definición de app = FastAPI(...))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"], # Permite enviar el encabezado 'Authorization'
 )
 
 # Registrar routers de la API v1
