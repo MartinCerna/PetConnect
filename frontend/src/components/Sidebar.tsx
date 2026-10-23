@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 // Asumiendo que usas lucide-react para los íconos del rediseño. Si no, puedes usar emojis como antes.
 import { MapPin, Dog, Activity, Stethoscope } from 'lucide-react';
+import Logo from './Logo';
 
 
 export default function Sidebar() {
@@ -16,7 +17,7 @@ export default function Sidebar() {
       <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between p-5 h-full">
          <div className="space-y-6">
             <div className="flex items-center gap-3">
-               <span className="text-2xl" role="img" aria-label="Logo">🐾</span>
+               <Logo size={32} />
                <div>
                   <h2 className="font-bold text-lg text-white">PetConnect</h2>
                   <p className="text-xs text-slate-400">Enterprise Dashboard</p>

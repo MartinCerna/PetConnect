@@ -1,6 +1,7 @@
 // src/app/page.tsx
 'use client';
 
+import Image from 'next/image';
 import Navbar from '@/components/Navbar';
 import CartDrawer from '@/components/CartDrawer';
 import { useAuth } from '@/context/AuthContext';
@@ -18,9 +19,6 @@ export default function LandingPage() {
       <section className="relative overflow-hidden py-20 bg-gradient-to-b from-indigo-50/50 to-slate-50">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
-            <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider">
-              Tecnología Crowdsourced Sin SIM
-            </span>
             <h1 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight">
               Conecta con quien más quieres
             </h1>
@@ -52,17 +50,15 @@ export default function LandingPage() {
           {/* Render Visual del Prototipo con Carcasa en Forma de Hueso */}
           <div className="relative flex justify-center">
             <div className="w-full max-w-md bg-white p-6 rounded-3xl shadow-2xl border border-slate-200 text-center space-y-4">
-              <div className="relative h-64 bg-slate-100 rounded-2xl flex items-center justify-center overflow-hidden border">
+              <div className="relative w-full aspect-[1024/850] bg-slate-100 rounded-2xl overflow-hidden border">
                 {/* Reemplazar src por la foto real del perro usando el collar hueso */}
-                <div className="text-center p-6 space-y-2">
-                  <div className="text-6xl">🐕🦴</div>
-                  <p className="text-xs font-bold text-slate-700">
-                    Prototipo PetConnect ESP32-C3
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    Carcasa ligera en forma de hueso de perro con emisión BLE activa
-                  </p>
-                </div>
+                <Image
+                  src="/images/prototipo.png"
+                  alt="Prototipo PetConnect ESP32-C3 con carcasa en forma de hueso"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 448px"
+                  className="object-cover"
+                />
               </div>
               <div className="flex justify-around text-xs font-semibold text-slate-600">
                 <span>⚡ Batería Larga Duración</span>
@@ -86,8 +82,14 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 space-y-4 hover:shadow-lg transition">
-              <div className="h-40 bg-white rounded-xl flex items-center justify-center text-5xl shadow-inner">
-                🦴
+              <div className="relative w-full aspect-[1024/622] bg-white rounded-xl overflow-hidden shadow-inner">
+                <Image
+                  src="/images/product.png"
+                  alt="PetConnect Tag"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  className="object-cover"
+                />
               </div>
               <div>
                 <h3 className="font-bold text-slate-900">PetConnect Tag</h3>
@@ -104,7 +106,7 @@ export default function LandingPage() {
                       name: 'PetConnect Bone Tag',
                       price: 29.99,
                       quantity: 1,
-                      image: '🦴',
+                      image: '/images/product.png',
                     })
                   }
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition"

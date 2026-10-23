@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Logo from '@/components/Logo';
 
 export default function RegisterPage() {
    const router = useRouter();
@@ -57,9 +58,7 @@ export default function RegisterPage() {
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
          <div className="bg-white max-w-md w-full p-8 rounded-2xl shadow-xl border border-slate-200">
             <div className="text-center mb-8">
-               <div className="inline-flex items-center justify-center w-12 h-12 bg-indigo-600 text-white rounded-xl font-bold text-xl mb-3 shadow-md">
-                  🐾
-               </div>
+               <div className="inline-flex items-center justify-center mb-3"><Logo size={48} /></div>
                <h1 className="text-2xl font-bold text-slate-900">Crear Cuenta en PetConnect</h1>
                <p className="text-sm text-slate-500 mt-1">
                   Regístrate para gestionar y localizar a tus mascotas

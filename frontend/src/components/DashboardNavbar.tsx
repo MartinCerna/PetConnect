@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ShoppingCart, LogOut, Home, User } from 'lucide-react'; // Asumiendo que usas lucide-react
+import Logo from './Logo';
 
 export default function DashboardNavbar() {
    return (
@@ -10,10 +11,10 @@ export default function DashboardNavbar() {
             <div className="flex justify-between items-center h-16">
 
                {/* LOGO: El puente hacia el inicio */}
-               <div className="flex-shrink-0 flex items-center">
+               <div className="flex-shrink-0 flex items-center h-full">
                   {/* Este Link lleva siempre a la Landing Page '/' */}
-                  <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                     <span className="text-2xl" role="img" aria-label="PetConnect Logo">🐾</span>
+                  <Link href="/" className="flex items-center gap-2 h-full hover:opacity-80 transition-opacity">
+                     <Logo size={64} className="h-full w-auto" />
                      <span className="font-bold text-xl text-indigo-700 hidden sm:block">PetConnect</span>
                   </Link>
                </div>

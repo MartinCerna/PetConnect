@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useState } from 'react';
+import Logo from './Logo';
 
 export default function Navbar() {
    const { token, cart, setIsCartOpen, logout } = useAuth();
@@ -17,11 +18,9 @@ export default function Navbar() {
          <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
 
             {/* 1. Logo de la marca: Huella + PetConnect */}
-            <Link href="/" className="flex items-center gap-2.5 group">
-               <div className="w-10 h-10 bg-indigo-600 group-hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center font-bold text-xl transition shadow-md shadow-indigo-200">
-                  🐾
-               </div>
-               <span className="text-xl font-extrabold text-slate-900 tracking-tight">
+            <Link href="/" className="flex items-center gap-2.5 group h-full">
+               <Logo size={80} className="h-full w-auto" />
+               <span className="text-2xl font-extrabold text-slate-900 tracking-tight">
                   Pet<span className="text-indigo-600">Connect</span>
                </span>
             </Link>
