@@ -1,4 +1,15 @@
 .gemini/
 .antigravity/
 .vscode/mcp.json
+.playwright-mcp/
 
+# Secretos y credenciales (NUNCA subir)
+.env
+.env.*
+backend/Auth/secrets.json
+
+# Archivos generados
+__pycache__/
+*.pyc
+firmware/build/
+backend/uploads/

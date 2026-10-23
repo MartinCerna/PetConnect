@@ -1,6 +1,8 @@
+import os
+import secrets
 from typing import List
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -11,9 +13,25 @@ from app.api.deps import get_current_user
 
 router = APIRouter()
 
+
+def verify_ingest_key(x_api_key: str = Header(default="", alias="X-API-Key")) -> None:
+    """Solo el worker de sincronización (o un dispositivo autorizado) puede escribir ubicaciones."""
+    expected = os.getenv("INGEST_API_KEY")
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="INGEST_API_KEY no está configurada en el servidor.",
+        )
+    if not secrets.compare_digest(x_api_key, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API key inválida.",
+        )
+
 @router.post("/", response_model=LocationResponse, status_code=status.HTTP_201_CREATED)
 def record_location(
     location_in: LocationCreate,
+    _: None = Depends(verify_ingest_key),
     db: Session = Depends(get_db)
 ):
     """

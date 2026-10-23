@@ -1,7 +1,8 @@
 // src/context/AuthContext.tsx
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { API_BASE } from '@/lib/api';
 
 export interface Pet {
    id: string;
@@ -9,22 +10,33 @@ export interface Pet {
    name: string;
    species: string;
    breed?: string;
-   birth_date?: string | null;  // <-- Agrega esta línea
+   birth_date?: string | null;
    photo_url?: string;
    created_at?: string;
-   // age?: number; <-- Puedes borrar esta línea, ya no viene del backend
+}
+
+export interface CartItem {
+   id: string;
+   name: string;
+   price: number;
+   quantity: number;
+   image?: string;
 }
 
 interface AuthContextType {
    token: string | null;
-   userPets: Pet[];       // Cambia 'pets: Pet[]' por 'userPets: Pet[]'
-   selectedPet: Pet | null; // Añade esta línea si no la tienes
-   setSelectedPet: (pet: Pet) => void; // Añade esta línea si no la tienes
+   userPets: Pet[];
+   selectedPet: Pet | null;
+   setSelectedPet: (pet: Pet) => void;
    loading: boolean;
-   cart: any[];
+   cart: CartItem[];
+   addToCart: (item: CartItem) => void;
+   removeFromCart: (id: string) => void;
+   updateQuantity: (id: string, quantity: number) => void;
+   clearCart: () => void;
    isCartOpen: boolean;
    setIsCartOpen: React.Dispatch<React.SetStateAction<boolean>>;
-   login: (formData: URLSearchParams) => void;
+   login: (formData: URLSearchParams) => Promise<boolean>;
    logout: () => void;
    registerPet: (petData: any) => Promise<boolean>;
    loadUserData: (authToken: string) => Promise<void>;
@@ -36,11 +48,83 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    const [token, setToken] = useState<string | null>(null);
    const [pets, setPets] = useState<Pet[]>([]);
    const [loading, setLoading] = useState(true);
+   const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
 
-   const [selectedPet, setSelectedPet] = useState<Pet | null>(null); // Estado para la mascota seleccionada
-   // Inicialización de estados del carrito
-   const [cart, setCart] = useState<any[]>([]);
+   const [cart, setCart] = useState<CartItem[]>([]);
    const [isCartOpen, setIsCartOpen] = useState(false);
+   const [cartLoaded, setCartLoaded] = useState(false);
+
+   // Recupera el carrito guardado en el navegador
+   useEffect(() => {
+      try {
+         const stored = localStorage.getItem('petconnect_cart');
+         if (stored) setCart(JSON.parse(stored));
+      } catch (error) {
+         console.error('Error leyendo carrito:', error);
+      }
+      setCartLoaded(true);
+   }, []);
+
+   // Guarda el carrito cada vez que cambia (solo tras la carga inicial)
+   useEffect(() => {
+      if (cartLoaded) localStorage.setItem('petconnect_cart', JSON.stringify(cart));
+   }, [cart, cartLoaded]);
+
+   const addToCart = (item: CartItem) => {
+      setCart((prev) => {
+         const existing = prev.find((i) => i.id === item.id);
+         if (existing) {
+            return prev.map((i) =>
+               i.id === item.id ? { ...i, quantity: Math.min(20, i.quantity + item.quantity) } : i
+            );
+         }
+         return [...prev, item];
+      });
+      setIsCartOpen(true);
+   };
+
+   const removeFromCart = (id: string) => {
+      setCart((prev) => prev.filter((i) => i.id !== id));
+   };
+
+   const updateQuantity = (id: string, quantity: number) => {
+      if (quantity < 1) return removeFromCart(id);
+      setCart((prev) =>
+         prev.map((i) => (i.id === id ? { ...i, quantity: Math.min(20, quantity) } : i))
+      );
+   };
+
+   const clearCart = () => setCart([]);
+
+   const logout = useCallback(() => {
+      setToken(null);
+      setPets([]);
+      setSelectedPet(null);
+      setCart([]);
+      localStorage.removeItem('petconnect_token');
+   }, []);
+
+   const loadUserData = useCallback(
+      async (authToken: string) => {
+         try {
+            const res = await fetch(`${API_BASE}/pets/`, {
+               headers: { Authorization: `Bearer ${authToken}` },
+            });
+
+            if (res.ok) {
+               setPets(await res.json());
+            } else if (res.status === 401) {
+               // Token vencido o inválido: se cierra la sesión
+               logout();
+            }
+         } catch (error) {
+            console.error('Error cargando mascotas:', error);
+         } finally {
+            setLoading(false);
+         }
+      },
+      [logout]
+   );
 
    useEffect(() => {
       const storedToken = localStorage.getItem('petconnect_token');
@@ -50,31 +134,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
          setLoading(false);
       }
-   }, []);
+   }, [loadUserData]);
 
-   const loadUserData = async (authToken: string) => {
+   const login = async (formData: URLSearchParams): Promise<boolean> => {
       try {
-         const res = await fetch('http://127.0.0.1:8000/api/v1/pets/', {
-            headers: {
-               Authorization: `Bearer ${authToken}`,
-            },
-         });
-
-         if (res.ok) {
-            const petsData = await res.json();
-            setPets(petsData);
-         }
-      } catch (error) {
-         console.error('Error cargando mascotas:', error);
-      } finally {
-         setLoading(false);
-      }
-   };
-
-   const login = async (formData: URLSearchParams) => {
-      try {
-         // CAMBIAR AQUÍ: Reemplazar '/token/' por '/login' (o el nombre exacto de tu backend)
-         const res = await fetch('http://127.0.0.1:8000/api/v1/auth/login', {
+         const res = await fetch(`${API_BASE}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: formData,
@@ -95,16 +159,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
    };
 
-   const logout = () => {
-      setToken(null);
-      setPets([]);
-      localStorage.removeItem('petconnect_token');
-   };
-
    const registerPet = async (petData: Omit<Pet, 'id'>) => {
       if (!token) return false;
       try {
-         const res = await fetch('http://127.0.0.1:8000/api/v1/pets/', {
+         const res = await fetch(`${API_BASE}/pets/`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',
@@ -124,23 +182,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
    };
 
-   // Aquí está el return que estaba arrojando el error, ahora correctamente 
-   // ubicado al final de la función AuthProvider
    return (
       <AuthContext.Provider
          value={{
             token,
-            userPets: pets, // Aquí le decimos que exponga 'pets' como 'userPets'
-            selectedPet,    // Ahora sí existe (Paso 2)
-            setSelectedPet, // Ahora sí existe (Paso 2)
+            userPets: pets,
+            selectedPet,
+            setSelectedPet,
             loading,
             cart,
+            addToCart,
+            removeFromCart,
+            updateQuantity,
+            clearCart,
             isCartOpen,
             setIsCartOpen,
             login,
             logout,
             registerPet,
-            loadUserData
+            loadUserData,
          }}
       >
          {children}

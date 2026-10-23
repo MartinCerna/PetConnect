@@ -7,7 +7,11 @@ import datetime
 import hashlib
 ########
 
+import os
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
     url = "http://127.0.0.1:8000/api/v1/locations/"
@@ -20,7 +24,8 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
         "recorded_at": timestamp_str
     }
     try:
-        response = requests.post(url, json=payload)
+        headers = {"X-API-Key": os.getenv("INGEST_API_KEY", "")}
+        response = requests.post(url, json=payload, headers=headers)
         if response.status_code == 201:
             print(" => Coordenada sincronizada con PetConnect.")
         else:

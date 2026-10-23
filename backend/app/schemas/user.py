@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
@@ -11,7 +11,7 @@ class UserBase(BaseModel):
 
 # Datos requeridos para el registro de usuario
 class UserCreate(UserBase):
-    password: str
+    password: str = Field(..., min_length=8, max_length=72)
 
 # Respuesta pública del perfil de usuario
 class UserResponse(UserBase):

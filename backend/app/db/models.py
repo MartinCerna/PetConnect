@@ -141,3 +141,32 @@ class MedicalRecord(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
     pet = relationship("Pet", back_populates="medical_records")
+
+
+# 7. Modelo de Pedidos (pago por Yape con captura de comprobante)
+class Order(Base):
+    __tablename__ = "orders"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    items_json = Column(Text, nullable=False)
+    total = Column(Numeric(10, 2), nullable=False)
+    shipping_name = Column(String(150), nullable=False)
+    shipping_phone = Column(String(30), nullable=False)
+    shipping_address = Column(String(300), nullable=False)
+    payment_proof_path = Column(String(300), nullable=False)
+    status = Column(String(20), default="PENDING")
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+# 8. Modelo de Mensajes de Contacto
+class ContactMessage(Base):
+    __tablename__ = "contact_messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(150), nullable=False)
+    email = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)

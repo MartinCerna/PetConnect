@@ -3,6 +3,9 @@ from datetime import datetime, timedelta
 from typing import Any, Union
 from jose import jwt
 import bcrypt
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configuración de claves y algoritmos de encriptación
 SECRET_KEY = os.getenv("SECRET_KEY", "PETCONNECT_SUPER_SECRET_KEY_CHANGE_IN_PRODUCTION_2026")

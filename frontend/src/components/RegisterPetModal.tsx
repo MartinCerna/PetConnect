@@ -102,16 +102,16 @@ export default function RegisterPetModal({
    };
 
    return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-         <div className="bg-white max-w-md w-full rounded-2xl shadow-2xl border border-slate-200 p-6 space-y-4">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4">
+         <div className="bg-white max-w-md w-full rounded-2xl shadow-2xl border border-neutral-200 p-6 space-y-4">
 
             <div className="flex justify-between items-center pb-2 border-b">
-               <h2 className="text-lg font-bold text-slate-900">
+               <h2 className="text-lg font-bold text-neutral-950">
                   Registrar Tarjeta de Mascota 🐾
                </h2>
                <button
                   onClick={onClose}
-                  className="text-slate-400 font-bold hover:text-slate-600 transition"
+                  className="text-neutral-400 font-bold hover:text-neutral-600 transition"
                >
                   ✕
                </button>
@@ -121,11 +121,11 @@ export default function RegisterPetModal({
 
                {/* Carga e Vista Previa de la Fotografía */}
                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
+                  <label className="block font-semibold text-neutral-700 mb-1">
                      Fotografía de la Mascota
                   </label>
-                  <div className="flex items-center gap-4 p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
-                     <div className="w-16 h-16 rounded-xl bg-slate-200 flex-shrink-0 flex items-center justify-center overflow-hidden border border-slate-300 text-2xl">
+                  <div className="flex items-center gap-4 p-3 bg-neutral-50 border border-dashed border-neutral-300 rounded-xl">
+                     <div className="w-16 h-16 rounded-xl bg-neutral-200 flex-shrink-0 flex items-center justify-center overflow-hidden border border-neutral-300 text-2xl">
                         {preview ? (
                            <img
                               src={preview}
@@ -147,11 +147,11 @@ export default function RegisterPetModal({
                         />
                         <label
                            htmlFor="pet-photo-upload"
-                           className="inline-block px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-lg border border-indigo-200 cursor-pointer transition text-xs"
+                           className="inline-block px-3 py-1.5 bg-pink-50 hover:bg-pink-100 text-pink-700 font-semibold rounded-lg border border-pink-200 cursor-pointer transition text-xs"
                         >
                            {preview ? 'Cambiar Imagen' : 'Subir Foto'}
                         </label>
-                        <p className="text-[10px] text-slate-400 mt-1">
+                        <p className="text-[10px] text-neutral-400 mt-1">
                            Formatos aceptados: JPG, PNG, WEBP.
                         </p>
                      </div>
@@ -159,24 +159,24 @@ export default function RegisterPetModal({
                </div>
 
                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Nombre</label>
+                  <label className="block font-semibold text-neutral-700 mb-1">Nombre</label>
                   <input
                      type="text"
                      required
                      value={name}
                      onChange={(e) => setName(e.target.value)}
                      placeholder="Ej. Thor"
-                     className="w-full px-3 py-2 border rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                     className="w-full px-3 py-2 border rounded-xl text-neutral-800 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
                   />
                </div>
 
                <div className="grid grid-cols-2 gap-3">
                   <div>
-                     <label className="block font-semibold text-slate-700 mb-1">Especie</label>
+                     <label className="block font-semibold text-neutral-700 mb-1">Especie</label>
                      <select
                         value={species}
                         onChange={(e) => setSpecies(e.target.value as 'perro' | 'gato')}
-                        className="w-full px-3 py-2 border rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full px-3 py-2 border rounded-xl text-neutral-800 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
                      >
                         <option value="perro">🐕 Perro</option>
                         <option value="gato">🐈 Gato</option>
@@ -184,7 +184,7 @@ export default function RegisterPetModal({
                   </div>
 
                   <div>
-                     <label className="block font-semibold text-slate-700 mb-1">
+                     <label className="block font-semibold text-neutral-700 mb-1">
                         Edad (Años)
                      </label>
                      <input
@@ -194,27 +194,27 @@ export default function RegisterPetModal({
                         required
                         value={age}
                         onChange={(e) => setAge(Number(e.target.value))}
-                        className="w-full px-3 py-2 border rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full px-3 py-2 border rounded-xl text-neutral-800 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
                      />
                   </div>
                </div>
 
                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Raza</label>
+                  <label className="block font-semibold text-neutral-700 mb-1">Raza</label>
                   <input
                      type="text"
                      required
                      value={breed}
                      onChange={(e) => setBreed(e.target.value)}
                      placeholder="Ej. Golden Retriever"
-                     className="w-full px-3 py-2 border rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                     className="w-full px-3 py-2 border rounded-xl text-neutral-800 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
                   />
                </div>
 
                <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition disabled:opacity-50 mt-2"
+                  className="w-full py-3 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-xl shadow-md transition disabled:opacity-50 mt-2"
                >
                   {submitting ? 'Guardando...' : 'Guardar Mascota'}
                </button>
