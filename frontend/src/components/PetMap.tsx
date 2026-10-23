@@ -52,7 +52,7 @@ export default function PetMap({
       };
    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-   // 2. Actualizar centro y marcadores cuando cambien las ubicaciones o la mascota
+   // 2. Actualizar centro y marcador único cuando cambie la ubicación o la mascota
    useEffect(() => {
       const map = mapInstanceRef.current;
       const markersLayer = markersLayerRef.current;
@@ -69,22 +69,21 @@ export default function PetMap({
          popupAnchor: [1, -34],
       });
 
+      // Solo mostramos el punto más reciente (primer elemento)
       if (locations.length > 0) {
-         locations.forEach((loc) => {
-            const marker = L.marker([loc.latitude, loc.longitude], { icon: customIcon });
-            marker.bindPopup(`
-               <div style="font-family: inherit; font-size: 13px; color: #171717;">
-                  <strong style="font-size: 14px;">${petName ?? 'Mascota'}</strong><br/>
-                  <span style="color: #666; font-size: 11px;">
-                     ${new Date(loc.recorded_at).toLocaleString()}
-                  </span>
-               </div>
-            `);
-            markersLayer.addLayer(marker);
-         });
-
-         const first = locations[0];
-         map.setView([first.latitude, first.longitude], 17);
+         const latestLoc = locations[0];
+         const marker = L.marker([latestLoc.latitude, latestLoc.longitude], { icon: customIcon });
+         marker.bindPopup(`
+            <div style="font-family: inherit; font-size: 13px; color: #171717;">
+               <strong style="font-size: 14px;">${petName ?? 'Mascota'}</strong><br/>
+               <span style="color: #059669; font-weight: 600; font-size: 11px;">Última ubicación conocida</span><br/>
+               <span style="color: #666; font-size: 11px;">
+                  ${new Date(latestLoc.recorded_at).toLocaleString()}
+               </span>
+            </div>
+         `);
+         markersLayer.addLayer(marker);
+         map.setView([latestLoc.latitude, latestLoc.longitude], 17);
       } else {
          map.setView(DEFAULT_CENTER, 15);
       }

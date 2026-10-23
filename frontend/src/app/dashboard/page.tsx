@@ -56,11 +56,15 @@ export default function DashboardPage() {
    const loadLocations = useCallback(async () => {
       if (!petId) return;
       try {
-         const res = await apiFetch(`/locations/pet/${petId}/history?limit=20`);
+         // Consulta exclusivamente la última ubicación registrada de la mascota
+         const res = await apiFetch(`/locations/pet/${petId}/latest`);
          if (res.ok) {
-            const data: Location[] = await res.json();
-            setLocations(data);
-            setLocationStatus(data.length ? '' : 'Aún no hay ubicaciones registradas.');
+            const data: Location = await res.json();
+            setLocations([data]);
+            setLocationStatus('');
+         } else if (res.status === 404) {
+            setLocations([]);
+            setLocationStatus('Aún no hay ubicaciones registradas.');
          } else if (res.status === 400) {
             setLocations([]);
             setLocationStatus('Esta mascota no tiene un dispositivo vinculado.');
@@ -184,7 +188,7 @@ export default function DashboardPage() {
                      <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-white/60 p-4 sm:p-5">
                         <h2 className="text-base sm:text-lg font-bold text-neutral-900 mb-1 sm:mb-2">Panel de Control</h2>
                         <p className="text-xs sm:text-sm text-neutral-500 mb-3 sm:mb-4 leading-relaxed">
-                           {locationStatus || 'Mostrando las últimas ubicaciones de tu mascota.'}
+                           {locationStatus || 'Mostrando la última ubicación en tiempo real.'}
                         </p>
                         <button
                            onClick={() => setShowRegister(true)}
@@ -197,7 +201,7 @@ export default function DashboardPage() {
 
                </div>
 
-               {/* Indicador de Estado de Red (Flotante arriba a la derecha en desktop, integrado en móvil) */}
+               {/* Indicador de Estado de Red */}
                <div className="ml-auto bg-white/95 backdrop-blur-md px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl shadow-lg border border-white/60 flex items-center gap-2 pointer-events-auto">
                   <span className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
                   <span className="font-semibold text-neutral-800 text-xs sm:text-sm">Red PetConnect</span>
