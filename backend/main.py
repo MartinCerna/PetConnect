@@ -17,7 +17,7 @@ from app.db.models import Order, ContactMessage
 from app.api.v1.endpoints import auth, pets, devices, locations, orders, contact
 
 # La sincronización con Google Find My es opcional: ENABLE_GOOGLE_SYNC=false la desactiva
-ENABLE_GOOGLE_SYNC = os.getenv("ENABLE_GOOGLE_SYNC", "true").lower() == "true"
+ENABLE_GOOGLE_SYNC = os.getenv("ENABLE_GOOGLE_SYNC", "false").lower() == "true"
 
 
 async def tarea_sincronizacion_continua(intervalo_segundos: int = 180):
@@ -29,7 +29,7 @@ async def tarea_sincronizacion_continua(intervalo_segundos: int = 180):
         try:
             print("\n[Auto-Sync] Consultando nuevas ubicaciones a Google Find My...")
             await asyncio.to_thread(ejecutar_sincronizacion_google)
-        except Exception as e:  # Un fallo del worker nunca debe afectar a la API
+        except Exception as e:
             print(f"[Auto-Sync] Error: {e}")
         await asyncio.sleep(intervalo_segundos)
 
@@ -58,12 +58,25 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Configuración de CORS permitiendo dominios locales y producción (Vercel)
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://pet-connect-flame.vercel.app",
+]
+
+# Si se define FRONTEND_URL adicional en variables de entorno, la agrega
+extra_frontend = os.getenv("FRONTEND_URL")
+if extra_frontend:
+    ALLOWED_ORIGINS.append(extra_frontend.rstrip("/"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Permite preview deployments de Vercel
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],  # Permite enviar el encabezado 'Authorization'
+    allow_headers=["*"],
 )
 
 # Registrar routers de la API v1

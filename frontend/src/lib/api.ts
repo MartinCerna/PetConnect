@@ -1,6 +1,12 @@
 // src/lib/api.ts
-// URL base del backend: configurable con NEXT_PUBLIC_API_URL (frontend/.env.local)
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:8000/api/v1';
+// Normaliza la URL base quitando barras finales accidentales
+const rawBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:8000/api/v1';
+export const API_BASE = rawBase.replace(/\/+$/, '');
+
+export function getApiUrl(endpoint: string): string {
+   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+   return `${API_BASE}${cleanEndpoint}`;
+}
 
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
    const token = typeof window !== 'undefined' ? localStorage.getItem('petconnect_token') : null;
@@ -18,7 +24,8 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
       headers['Authorization'] = `Bearer ${token}`;
    }
 
-   const res = await fetch(`${API_BASE}${endpoint}`, {
+   const url = getApiUrl(endpoint);
+   const res = await fetch(url, {
       ...options,
       headers,
    });
