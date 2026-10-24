@@ -59,3 +59,4 @@ El frontend ya fue configurado para compilarse **comprimido (Gzip/Brotli) y sin 
 ## 🔒 PASO 3: Permitir CORS en el Backend
 
 Una vez que tengas la URL de Vercel (ej: `https://petconnect.vercel.app`), en `backend/main.py` o en el dashboard de Render se asegura que los orígenes permitidos incluyan tu dominio de Vercel.
+
