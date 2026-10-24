@@ -1,7 +1,24 @@
 // src/lib/api.ts
-// Normaliza la URL base quitando barras finales accidentales
-const rawBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:8000/api/v1';
-export const API_BASE = rawBase.replace(/\/+$/, '');
+
+/**
+ * Normaliza la URL base de la API:
+ * Si en producción NEXT_PUBLIC_API_URL fue configurada como 'https://...onrender.com'
+ * sin el '/api/v1', esta función asegura que siempre termine en '/api/v1'.
+ */
+function resolveApiBase(): string {
+   const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+   if (!envUrl) {
+      return 'http://127.0.0.1:8000/api/v1';
+   }
+
+   const clean = envUrl.replace(/\/+$/, '');
+   if (!clean.endsWith('/api/v1')) {
+      return `${clean}/api/v1`;
+   }
+   return clean;
+}
+
+export const API_BASE = resolveApiBase();
 
 export function getApiUrl(endpoint: string): string {
    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
