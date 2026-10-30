@@ -135,3 +135,4 @@ def delete_reminder(
     db.delete(reminder)
     db.commit()
     return None
+

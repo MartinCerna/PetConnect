@@ -38,3 +38,4 @@ class ReminderResponse(ReminderBase):
 
     class Config:
         from_attributes = True
+
