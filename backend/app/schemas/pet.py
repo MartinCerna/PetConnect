@@ -14,6 +14,8 @@ class PetBase(BaseModel):
 # Esquema para la petición de CREACIÓN (Recibe 'age' del frontend)
 class PetCreate(PetBase):
     age: Optional[int] = None
+    birth_date: Optional[date] = None
+    device_mac: Optional[str] = None
 
 
 # Esquema de RESPUESTA (Calcula 'age' a partir de 'birth_date')

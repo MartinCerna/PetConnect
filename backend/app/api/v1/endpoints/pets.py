@@ -39,7 +39,7 @@ def create_pet(
         device_id = device.id
 
     # 1. Determinamos la fecha de nacimiento real o calculada
-    final_birth_date = pet_in.birth_date
+    final_birth_date = getattr(pet_in, 'birth_date', None)
     if getattr(pet_in, "age", None) is not None:
         current_year = date.today().year
         # Si envían "6", se resta al año actual y se fija al 1 de enero

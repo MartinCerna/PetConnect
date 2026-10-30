@@ -1,6 +1,6 @@
 import os
 import secrets
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
@@ -57,7 +57,7 @@ def record_location(
     db.refresh(new_location)
     return new_location
 
-@router.get("/pet/{pet_id}/latest", response_model=LocationResponse)
+@router.get("/pet/{pet_id}/latest", response_model=Optional[LocationResponse])
 def get_latest_pet_location(
     pet_id: UUID,
     db: Session = Depends(get_db),
@@ -71,7 +71,7 @@ def get_latest_pet_location(
         raise HTTPException(status_code=404, detail="Mascota no encontrada o no autorizada.")
 
     if not pet.device_id:
-        raise HTTPException(status_code=400, detail="La mascota no tiene un dispositivo ESP32 vinculado.")
+        return None
 
     latest_location = (
         db.query(LocationLog)
@@ -81,7 +81,7 @@ def get_latest_pet_location(
     )
 
     if not latest_location:
-        raise HTTPException(status_code=404, detail="No se han registrado ubicaciones para esta mascota.")
+        return None
 
     return latest_location
 
@@ -100,7 +100,7 @@ def get_pet_location_history(
         raise HTTPException(status_code=404, detail="Mascota no encontrada o no autorizada.")
 
     if not pet.device_id:
-        raise HTTPException(status_code=400, detail="La mascota no tiene un dispositivo ESP32 vinculado.")
+        return None
 
     return (
         db.query(LocationLog)

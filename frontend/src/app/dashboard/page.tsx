@@ -59,9 +59,14 @@ export default function DashboardPage() {
          // Consulta exclusivamente la última ubicación registrada de la mascota
          const res = await apiFetch(`/locations/pet/${petId}/latest`);
          if (res.ok) {
-            const data: Location = await res.json();
-            setLocations([data]);
-            setLocationStatus('');
+            const data: Location | null = await res.json();
+            if (data && data.latitude && data.longitude) {
+               setLocations([data]);
+               setLocationStatus('');
+            } else {
+               setLocations([]);
+               setLocationStatus(selectedPet?.device_id ? 'Aún no hay ubicaciones registradas.' : 'Esta mascota no tiene un dispositivo vinculado.');
+            }
          } else if (res.status === 404) {
             setLocations([]);
             setLocationStatus('Aún no hay ubicaciones registradas.');

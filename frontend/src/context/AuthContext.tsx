@@ -7,6 +7,7 @@ import { API_BASE } from '@/lib/api';
 export interface Pet {
    id: string;
    user_id: string;
+   device_id?: string | null;
    name: string;
    species: string;
    breed?: string;
