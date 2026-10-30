@@ -9,8 +9,8 @@ import { apiFetch, errorMessage } from '@/lib/api';
 const DOG_IMAGE_SRC = '/images/perrito-collar.png';
 
 const CONTACT_INFO = [
-   { icon: Phone, text: '999 999 999' },
-   { icon: Mail, text: 'hola@petconnect.com' },
+   { icon: Phone, text: '920 676 304' },
+   { icon: Mail, text: 'petconnect969@gmail.com' },
    { icon: MapPin, text: 'Trujillo, La Libertad - Perú' },
 ];
 

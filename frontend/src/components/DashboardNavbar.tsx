@@ -8,11 +8,13 @@ import { useAuth } from '@/context/AuthContext';
 
 const LINKS = [
    { href: '/dashboard', label: 'Panel' },
+   { href: '/dashboard/recordatorios', label: 'Recordatorios' },
+   { href: '/dashboard/contacto', label: 'Placa y Contacto' },
    { href: '/dashboard/dispositivos', label: 'Dispositivos' },
 ];
 
 export default function DashboardNavbar() {
-   const { logout } = useAuth();
+   const { logout, user } = useAuth();
    const router = useRouter();
    const pathname = usePathname();
 
@@ -71,13 +73,18 @@ export default function DashboardNavbar() {
                      <Home className="w-5 h-5" />
                   </Link>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                      <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-700 font-bold border border-sky-200">
                         <User className="w-4 h-4" />
                      </div>
+                     {user?.full_name && (
+                        <span className="text-xs font-semibold text-neutral-700 hidden md:block max-w-[120px] truncate">
+                           {user.full_name}
+                        </span>
+                     )}
                      <button
                         onClick={handleLogout}
-                        className="p-2 text-neutral-400 hover:text-red-600 rounded-md hover:bg-red-50 transition-colors"
+                        className="p-2 text-neutral-400 hover:text-red-600 rounded-md hover:bg-red-50 transition-colors ml-1"
                         title="Cerrar sesión"
                         aria-label="Cerrar sesión"
                      >

@@ -1,4 +1,5 @@
-from typing import List
+import uuid
+from typing import List, Optional
 from datetime import date  # <-- Nuevo import necesario para el cálculo
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -70,3 +71,33 @@ def list_my_pets(
     Lista las mascotas registradas por el usuario actualmente autenticado.
     """
     return db.query(Pet).filter(Pet.user_id == current_user.id).all()
+
+
+@router.get("/{pet_id}/contact")
+def get_pet_contact_info(pet_id: str, db: Session = Depends(get_db)):
+    """
+    Endpoint público accesible al escanear la placa/collar de la mascota.
+    Retorna los datos de contacto del dueño (nombre, celular, dirección)
+    para que quien encuentre a la mascota pueda comunicarse de inmediato.
+    """
+    try:
+        pid = uuid.UUID(pet_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Identificador de mascota inválido.")
+
+    pet = db.query(Pet).filter(Pet.id == pid).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada.")
+
+    owner = pet.owner
+    return {
+        "pet_id": str(pet.id),
+        "name": pet.name,
+        "species": pet.species,
+        "breed": pet.breed,
+        "birth_date": pet.birth_date.isoformat() if pet.birth_date else None,
+        "photo_url": pet.photo_url,
+        "owner_name": owner.full_name if owner else "Dueño de PetConnect",
+        "owner_phone": getattr(owner, "phone", None) if owner else None,
+        "owner_address": getattr(owner, "address", None) if owner else None,
+    }

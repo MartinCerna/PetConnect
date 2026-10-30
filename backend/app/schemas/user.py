@@ -8,10 +8,17 @@ class UserBase(BaseModel):
     email: EmailStr
     full_name: str
     phone: Optional[str] = None
+    address: Optional[str] = None
 
 # Datos requeridos para el registro de usuario
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8, max_length=72)
+
+# Actualización del perfil de usuario (nombre, teléfono, dirección)
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = Field(None, min_length=2, max_length=150)
+    phone: Optional[str] = Field(None, max_length=20)
+    address: Optional[str] = Field(None, max_length=255)
 
 # Respuesta pública del perfil de usuario
 class UserResponse(UserBase):

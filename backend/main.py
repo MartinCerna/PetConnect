@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.db.session import get_db, engine
-from app.db.models import Order, ContactMessage
-from app.api.v1.endpoints import auth, pets, devices, locations, orders, contact
+from app.db.models import Order, ContactMessage, Reminder
+from app.api.v1.endpoints import auth, pets, devices, locations, orders, contact, reminders
 
 # La sincronización con Google Find My es opcional: ENABLE_GOOGLE_SYNC=false la desactiva
 ENABLE_GOOGLE_SYNC = os.getenv("ENABLE_GOOGLE_SYNC", "false").lower() == "true"
@@ -36,12 +36,16 @@ async def tarea_sincronizacion_continua(intervalo_segundos: int = 180):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Crea solo las tablas nuevas (pedidos y contacto) si aún no existen
+    # Crea tablas nuevas y asegura columnas si no existen en la base de datos
     try:
         Order.__table__.create(bind=engine, checkfirst=True)
         ContactMessage.__table__.create(bind=engine, checkfirst=True)
+        Reminder.__table__.create(bind=engine, checkfirst=True)
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS address VARCHAR(255);"))
+            conn.commit()
     except Exception as e:
-        print(f"[DB] No se pudieron verificar las tablas nuevas: {e}")
+        print(f"[DB] No se pudieron verificar tablas o columnas: {e}")
 
     task = None
     if ENABLE_GOOGLE_SYNC:
@@ -86,6 +90,7 @@ app.include_router(devices.router, prefix="/api/v1/devices", tags=["Dispositivos
 app.include_router(locations.router, prefix="/api/v1/locations", tags=["Ubicaciones y Geolocalización"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Pedidos"])
 app.include_router(contact.router, prefix="/api/v1/contact", tags=["Contacto"])
+app.include_router(reminders.router, prefix="/api/v1/reminders", tags=["Recordatorios"])
 
 
 @app.get("/api/v1/health", tags=["Infraestructura"])

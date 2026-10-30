@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.db.models import User
-from app.schemas.user import UserCreate, UserResponse, Token
+from app.schemas.user import UserCreate, UserResponse, UserUpdate, Token
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.api.deps import get_current_user
 
@@ -58,4 +58,25 @@ def get_me(current_user: User = Depends(get_current_user)):
     """
     Devuelve la información del usuario actualmente autenticado.
     """
+    return current_user
+
+
+@router.put("/profile", response_model=UserResponse)
+def update_profile(
+    user_in: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Actualiza los datos de contacto del usuario (nombre, celular y dirección).
+    """
+    if user_in.full_name is not None and user_in.full_name.strip():
+        current_user.full_name = user_in.full_name.strip()
+    if user_in.phone is not None:
+        current_user.phone = user_in.phone.strip()
+    if user_in.address is not None:
+        current_user.address = user_in.address.strip()
+
+    db.commit()
+    db.refresh(current_user)
     return current_user

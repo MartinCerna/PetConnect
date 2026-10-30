@@ -25,8 +25,17 @@ export interface CartItem {
    image?: string;
 }
 
+export interface UserProfile {
+   id: string;
+   email: string;
+   full_name: string;
+   phone?: string | null;
+   address?: string | null;
+}
+
 interface AuthContextType {
    token: string | null;
+   user: UserProfile | null;
    userPets: Pet[];
    selectedPet: Pet | null;
    setSelectedPet: (pet: Pet) => void;
@@ -40,6 +49,7 @@ interface AuthContextType {
    setIsCartOpen: React.Dispatch<React.SetStateAction<boolean>>;
    login: (formData: URLSearchParams) => Promise<boolean>;
    logout: () => void;
+   updateProfile: (data: { full_name?: string; phone?: string; address?: string }) => Promise<boolean>;
    registerPet: (petData: any) => Promise<boolean>;
    loadUserData: (authToken: string) => Promise<void>;
 }
@@ -48,6 +58,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
    const [token, setToken] = useState<string | null>(null);
+   const [user, setUser] = useState<UserProfile | null>(null);
    const [pets, setPets] = useState<Pet[]>([]);
    const [loading, setLoading] = useState(true);
    const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
@@ -100,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
    const logout = useCallback(() => {
       setToken(null);
+      setUser(null);
       setPets([]);
       setSelectedPet(null);
       setCart([]);
@@ -109,24 +121,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    const loadUserData = useCallback(
       async (authToken: string) => {
          try {
-            const res = await fetch(`${API_BASE}/pets/`, {
-               headers: { Authorization: `Bearer ${authToken}` },
-            });
+            const [petsRes, userRes] = await Promise.all([
+               fetch(`${API_BASE}/pets/`, {
+                  headers: { Authorization: `Bearer ${authToken}` },
+               }),
+               fetch(`${API_BASE}/auth/me`, {
+                  headers: { Authorization: `Bearer ${authToken}` },
+               }),
+            ]);
 
-            if (res.ok) {
-               setPets(await res.json());
-            } else if (res.status === 401) {
+            if (petsRes.ok) {
+               setPets(await petsRes.json());
+            } else if (petsRes.status === 401) {
                // Token vencido o inválido: se cierra la sesión
                logout();
+               return;
+            }
+
+            if (userRes.ok) {
+               setUser(await userRes.json());
             }
          } catch (error) {
-            console.error('Error cargando mascotas:', error);
+            console.error('Error cargando datos:', error);
          } finally {
             setLoading(false);
          }
       },
       [logout]
    );
+
+   const updateProfile = async (data: { full_name?: string; phone?: string; address?: string }): Promise<boolean> => {
+      if (!token) return false;
+      try {
+         const res = await fetch(`${API_BASE}/auth/profile`, {
+            method: 'PUT',
+            headers: {
+               'Content-Type': 'application/json',
+               Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(data),
+         });
+
+         if (res.ok) {
+            const updated = await res.json();
+            setUser(updated);
+            return true;
+         }
+         return false;
+      } catch (error) {
+         console.error('Error actualizando perfil:', error);
+         return false;
+      }
+   };
 
    useEffect(() => {
       const storedToken = localStorage.getItem('petconnect_token');
@@ -188,6 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       <AuthContext.Provider
          value={{
             token,
+            user,
             userPets: pets,
             selectedPet,
             setSelectedPet,
@@ -201,6 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setIsCartOpen,
             login,
             logout,
+            updateProfile,
             registerPet,
             loadUserData,
          }}

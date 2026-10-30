@@ -28,11 +28,13 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(150), nullable=False)
     phone = Column(String(20))
+    address = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
     # Relaciones
     pets = relationship("Pet", back_populates="owner", cascade="all, delete-orphan")
+    reminders = relationship("Reminder", back_populates="user", cascade="all, delete-orphan")
     devices = relationship(
         "Device", back_populates="owner", cascade="all, delete-orphan"
     )
@@ -78,6 +80,7 @@ class Pet(Base):
 
     # Relaciones
     owner = relationship("User", back_populates="pets")
+    reminders = relationship("Reminder", back_populates="pet", cascade="all, delete-orphan")
     device = relationship("Device", back_populates="pet")
     vaccines = relationship(
         "Vaccine", back_populates="pet", cascade="all, delete-orphan"
@@ -170,3 +173,28 @@ class ContactMessage(Base):
     email = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+# 9. Modelo de Recordatorios (Medicamentos, Vacunas/Desparasitaciones, Baños y Paseos)
+class Reminder(Base):
+    __tablename__ = "reminders"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    pet_id = Column(
+        UUID(as_uuid=True), ForeignKey("pets.id", ondelete="CASCADE"), nullable=True
+    )
+
+    category = Column(String(50), nullable=False)  # 'medicamento', 'vacuna_desparasitacion', 'bano_paseo'
+    title = Column(String(200), nullable=False)
+    frequency = Column(String(100), nullable=True)
+    time_schedule = Column(String(100), nullable=True)
+    notes = Column(Text, nullable=True)
+    is_completed = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    user = relationship("User", back_populates="reminders")
+    pet = relationship("Pet", back_populates="reminders")
