@@ -61,7 +61,14 @@ export default function CartDrawer() {
                               <span className="text-2xl">🦴</span>
                               <div className="min-w-0">
                                  <p className="text-xs font-bold text-neutral-800 truncate">{item.name}</p>
-                                 <p className="text-xs text-neutral-500">${item.price.toFixed(2)} c/u</p>
+                                 <div className="flex items-center gap-1.5 mt-0.5">
+                                    {item.color && (
+                                       <span className="text-[10px] bg-neutral-200/70 text-neutral-700 px-1.5 py-0.5 rounded font-medium">
+                                          {item.color}
+                                       </span>
+                                    )}
+                                    <p className="text-xs text-neutral-500">S/. {item.price.toFixed(2)} c/u</p>
+                                 </div>
                               </div>
                            </div>
                            <div className="flex items-center gap-2 shrink-0">
@@ -96,7 +103,7 @@ export default function CartDrawer() {
             <div className="pt-4 border-t space-y-4">
                <div className="flex justify-between text-base font-bold text-neutral-950">
                   <span>Total:</span>
-                  <span>${total.toFixed(2)} USD</span>
+                  <span>S/. {total.toFixed(2)}</span>
                </div>
                <button
                   onClick={() => {

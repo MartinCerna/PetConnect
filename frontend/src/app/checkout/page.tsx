@@ -147,13 +147,20 @@ export default function CheckoutPage() {
                         >
                            <div>
                               <p className="text-sm font-bold text-neutral-800">{item.name}</p>
-                              <p className="text-xs text-neutral-500">
-                                 ${item.price.toFixed(2)} x {item.quantity}
-                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                 {item.color && (
+                                    <span className="text-[10px] bg-neutral-200/80 text-neutral-700 px-1.5 py-0.5 rounded font-medium">
+                                       Color: {item.color}
+                                    </span>
+                                 )}
+                                 <p className="text-xs text-neutral-500">
+                                    S/. {item.price.toFixed(2)} x {item.quantity}
+                                 </p>
+                              </div>
                            </div>
                            <div className="flex items-center gap-4">
                               <span className="text-sm font-bold text-neutral-950">
-                                 ${(item.price * item.quantity).toFixed(2)}
+                                 S/. {(item.price * item.quantity).toFixed(2)}
                               </span>
                               <button
                                  type="button"
@@ -168,7 +175,7 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex justify-between text-base font-bold text-neutral-950 pt-4 border-t">
                      <span>Total:</span>
-                     <span>${total.toFixed(2)} USD</span>
+                     <span>S/. {total.toFixed(2)}</span>
                   </div>
                </section>
 
@@ -227,6 +234,9 @@ export default function CheckoutPage() {
 
                <div className="flex flex-col items-center space-y-2">
                   <p className="text-xs text-neutral-500">Escanea el código QR desde tu app de Yape</p>
+                  <p className="text-sm font-bold text-neutral-900 bg-neutral-100 px-3 py-1 rounded-full">
+                     Monto exacto: <span className="text-pink-600 font-extrabold">S/. {total.toFixed(2)}</span>
+                  </p>
                   {qrError ? (
                      <div className="w-56 h-56 rounded-xl border-2 border-dashed border-neutral-300 flex items-center justify-center text-center text-xs text-neutral-400 p-4">
                         Coloca la imagen del QR en

@@ -1,6 +1,7 @@
 // src/app/page.tsx
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
 import Navbar from '@/components/Navbar';
 import CartDrawer from '@/components/CartDrawer';
@@ -8,6 +9,20 @@ import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import ContactSection from '@/components/ContactSection';
 import { ShoppingCart, Bone, MapPin, Smartphone, CheckCircle } from 'lucide-react';
+
+interface ProductColor {
+  id: string;
+  name: string;
+  hex: string;
+}
+
+const PRODUCT_COLORS: ProductColor[] = [
+  { id: 'rosado', name: 'Rosado', hex: '#ec4899' },
+  { id: 'celeste', name: 'Celeste', hex: '#38bdf8' },
+  { id: 'negro', name: 'Negro', hex: '#171717' },
+  { id: 'verde', name: 'Verde', hex: '#22c55e' },
+  { id: 'rojo', name: 'Rojo', hex: '#ef4444' },
+];
 
 const STEPS = [
   {
@@ -42,6 +57,7 @@ const STEPS = [
 
 export default function LandingPage() {
   const { addToCart } = useAuth();
+  const [selectedColor, setSelectedColor] = useState<ProductColor>(PRODUCT_COLORS[0]);
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-800">
@@ -134,7 +150,7 @@ export default function LandingPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-            <div className="bg-neutral-50 rounded-2xl p-5 sm:p-6 border border-neutral-200 space-y-4 hover:shadow-lg transition flex flex-col justify-between">
+            <div className="group bg-neutral-50 rounded-2xl p-5 sm:p-6 border border-neutral-200 space-y-4 hover:shadow-xl hover:border-neutral-300 transition-all duration-300 flex flex-col justify-between">
               <div className="space-y-4">
                 <div className="relative w-full aspect-[1024/622] bg-white rounded-xl overflow-hidden shadow-inner border border-neutral-100">
                   <Image
@@ -142,11 +158,65 @@ export default function LandingPage() {
                     alt="PetConnect Tag"
                     fill
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    className="object-cover"
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
                   />
+
+                  {/* Badge Venta */}
+                  <div className="absolute top-3 left-3 flex items-center gap-1.5 z-10">
+                    <span className="bg-red-600 text-white text-[11px] font-black px-2.5 py-1 rounded shadow uppercase tracking-wide">
+                      VENTA
+                    </span>
+                  </div>
+
+                  {/* Opciones de color que aparecen al poner el mouse sobre el producto */}
+                  <div className="absolute inset-x-0 bottom-0 bg-white/95 backdrop-blur-md p-3.5 border-t border-neutral-200/80 transition-all duration-300 transform translate-y-0 opacity-100 sm:translate-y-2 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100 z-10 shadow-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="font-extrabold text-neutral-950">Color</span>
+                        <span className="text-neutral-300">|</span>
+                        <span className="font-bold text-neutral-800">{selectedColor.name}</span>
+                      </div>
+                      <span className="text-[10px] text-neutral-400 font-medium">5 opciones</span>
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      {PRODUCT_COLORS.map((col) => {
+                        const isSelected = selectedColor.id === col.id;
+                        return (
+                          <button
+                            key={col.id}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setSelectedColor(col);
+                            }}
+                            title={`Color ${col.name}`}
+                            aria-label={`Seleccionar color ${col.name}`}
+                            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                              isSelected
+                                ? 'ring-2 ring-neutral-900 ring-offset-2 scale-110 shadow-sm'
+                                : 'hover:scale-105 opacity-80 hover:opacity-100'
+                            }`}
+                          >
+                            <span
+                              className="w-full h-full rounded-full border border-black/15 shadow-inner"
+                              style={{ backgroundColor: col.hex }}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
+
                 <div>
-                  <h3 className="font-bold text-lg text-neutral-950">PetConnect Tag</h3>
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-bold text-lg text-neutral-950">PetConnect Tag</h3>
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-neutral-200/70 text-neutral-800 border border-neutral-200 shrink-0">
+                      Color: {selectedColor.name}
+                    </span>
+                  </div>
                   <p className="text-xs text-neutral-500 mt-1">
                     Rastreador inteligente con carcasa en forma de hueso, soporte impermeable y clip de sujeción rápida.
                   </p>
@@ -154,18 +224,22 @@ export default function LandingPage() {
               </div>
               
               <div className="flex justify-between items-center pt-3 border-t border-neutral-200/60">
-                <span className="text-xl font-black text-neutral-950">$29.99 USD</span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase tracking-wider text-neutral-400 font-bold">Precio</span>
+                  <span className="text-xl font-black text-neutral-950">S/. 109.99</span>
+                </div>
                 <button
                   onClick={() =>
                     addToCart({
-                      id: 'tag-bone-01',
-                      name: 'PetConnect Bone Tag',
-                      price: 29.99,
+                      id: `tag-bone-01-${selectedColor.id}`,
+                      name: `PetConnect Tag (${selectedColor.name})`,
+                      price: 109.99,
                       quantity: 1,
+                      color: selectedColor.name,
                       image: '/images/product.png',
                     })
                   }
-                  className="px-4 py-2.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-pink-200"
+                  className="px-4 py-2.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-pink-200 flex items-center gap-1.5"
                 >
                   + Agregar al Carrito
                 </button>

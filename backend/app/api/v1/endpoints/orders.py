@@ -17,7 +17,12 @@ router = APIRouter()
 
 # Catálogo del servidor: el precio NUNCA se toma del navegador
 CATALOG = {
-    "tag-bone-01": {"name": "PetConnect Bone Tag", "price": Decimal("29.99")},
+    "tag-bone-01": {"name": "PetConnect Bone Tag", "price": Decimal("109.99")},
+    "tag-bone-01-rosado": {"name": "PetConnect Bone Tag (Rosado)", "price": Decimal("109.99")},
+    "tag-bone-01-celeste": {"name": "PetConnect Bone Tag (Celeste)", "price": Decimal("109.99")},
+    "tag-bone-01-negro": {"name": "PetConnect Bone Tag (Negro)", "price": Decimal("109.99")},
+    "tag-bone-01-verde": {"name": "PetConnect Bone Tag (Verde)", "price": Decimal("109.99")},
+    "tag-bone-01-rojo": {"name": "PetConnect Bone Tag (Rojo)", "price": Decimal("109.99")},
 }
 
 UPLOAD_DIR = Path(__file__).resolve().parents[4] / "uploads" / "payments"
