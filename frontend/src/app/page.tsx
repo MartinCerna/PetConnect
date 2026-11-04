@@ -280,7 +280,7 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center space-y-5">
           <h2 className="text-2xl sm:text-3xl font-bold text-neutral-950">Sobre PetConnect</h2>
           <p className="text-neutral-600 leading-relaxed text-sm sm:text-base max-w-3xl mx-auto">
-            Descripción acerca del proyecto, motivo y fin.
+            En Pet Connect transformamos la tecnología en tranquilidad. Creamos collares inteligentes artesanales con códigos QR y proximidad para que proteger a tu compañero de vida sea fácil y accesible. Conecta con quien más quieres.
           </p>
         </div>
       </section>
