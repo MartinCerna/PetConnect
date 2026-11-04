@@ -19,6 +19,7 @@ import {
    AlertCircle,
    X,
    Check,
+   Lightbulb,
 } from 'lucide-react';
 
 export interface ReminderItem {
@@ -34,6 +35,45 @@ export interface ReminderItem {
    is_active: boolean;
    created_at: string;
 }
+
+const PET_TIPS = [
+   {
+      id: 1,
+      text: 'El agua de tu mascota debe renovarse al menos dos veces al día para asegurar que esté fresca y libre de impurezas.',
+      icon: '💧',
+      badge: 'Hidratación',
+   },
+   {
+      id: 2,
+      text: 'Los perros necesitan ejercitarse diariamente según su raza y edad para liberar energía y evitar problemas de ansiedad o estrés.',
+      icon: '🏃',
+      badge: 'Ejercicio y Energía',
+   },
+   {
+      id: 3,
+      text: 'La desparasitación periódica previene pulgas, garrapatas y parásitos intestinales, protegiendo tanto al animal como a la familia.',
+      icon: '🛡️',
+      badge: 'Salud Preventiva',
+   },
+   {
+      id: 4,
+      text: 'Establecer horas determinadas para comer ayuda a regular su metabolismo y facilita la digestión.',
+      icon: '⏰',
+      badge: 'Alimentación',
+   },
+   {
+      id: 5,
+      text: 'Acostumbrar a tu mascota a diferentes entornos, sonidos y personas desde cachorro previene miedos y conductas agresivas de adulto.',
+      icon: '🐕',
+      badge: 'Socialización',
+   },
+   {
+      id: 6,
+      text: 'Utilizar juguetes interactivos o juegos de olfato ayuda a mantener la mente de tu mascota activa y previene el aburrimiento destructivo.',
+      icon: '🧩',
+      badge: 'Estimulación Mental',
+   },
+];
 
 const CATEGORIES = [
    {
@@ -65,6 +105,14 @@ const CATEGORIES = [
       color: 'bg-emerald-500 text-white',
       badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       description: 'Higiene, paseos y bienestar diario',
+   },
+   {
+      id: 'tips',
+      label: 'Tips',
+      icon: Lightbulb,
+      color: 'bg-amber-500 text-white',
+      badge: 'bg-amber-50 text-amber-700 border-amber-200',
+      description: 'Consejos de bienestar para tu mascota',
    },
 ];
 
@@ -308,11 +356,16 @@ export default function RecordatoriosPage() {
             </div>
 
             {/* Pestañas de Categorías */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                {CATEGORIES.map((cat) => {
                   const Icon = cat.icon;
                   const isActive = activeTab === cat.id;
-                  const count = cat.id === 'todos' ? reminders.length : reminders.filter((r) => r.category === cat.id).length;
+                  const count =
+                     cat.id === 'todos'
+                        ? reminders.length
+                        : cat.id === 'tips'
+                        ? PET_TIPS.length
+                        : reminders.filter((r) => r.category === cat.id).length;
 
                   return (
                      <button
@@ -343,21 +396,71 @@ export default function RecordatoriosPage() {
                })}
             </div>
 
-            {/* Listado de Recordatorios */}
+            {/* Listado de Recordatorios o Consejos (Tips) */}
             <div className="bg-white rounded-3xl border border-neutral-200 p-6 sm:p-8 shadow-sm space-y-6">
                <div className="flex items-center justify-between border-b pb-4">
                   <div className="flex items-center gap-2">
-                     <Clock className="w-5 h-5 text-neutral-400" />
+                     {activeTab === 'tips' ? (
+                        <Lightbulb className="w-5 h-5 text-amber-500" />
+                     ) : (
+                        <Clock className="w-5 h-5 text-neutral-400" />
+                     )}
                      <h2 className="text-base font-bold text-neutral-900">
-                        {activeTab === 'todos' ? 'Todos los recordatorios' : CATEGORIES.find((c) => c.id === activeTab)?.label}
+                        {activeTab === 'todos'
+                           ? 'Todos los recordatorios'
+                           : activeTab === 'tips'
+                           ? 'Consejos para el bienestar de tu mascota'
+                           : CATEGORIES.find((c) => c.id === activeTab)?.label}
                      </h2>
                   </div>
                   <span className="text-xs text-neutral-400">
-                     {filteredReminders.length} {filteredReminders.length === 1 ? 'recordatorio' : 'recordatorios'}
+                     {activeTab === 'tips'
+                        ? `${PET_TIPS.length} consejos`
+                        : `${filteredReminders.length} ${filteredReminders.length === 1 ? 'recordatorio' : 'recordatorios'}`}
                   </span>
                </div>
 
-               {loading ? (
+               {activeTab === 'tips' ? (
+                  <div className="space-y-6">
+                     <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-pink-50 border border-amber-200/80 rounded-2xl p-5 flex items-start gap-4 shadow-sm">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
+                           <Lightbulb className="w-6 h-6" />
+                        </div>
+                        <div className="space-y-1">
+                           <h3 className="font-extrabold text-base text-neutral-900">
+                              Consejos para el bienestar de tu mascota:
+                           </h3>
+                           <p className="text-xs text-neutral-600 leading-relaxed">
+                              Recomendaciones esenciales para mantener a tu perro o gato saludable, protegido, física y mentalmente activo.
+                           </p>
+                        </div>
+                     </div>
+
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {PET_TIPS.map((tip) => (
+                           <div
+                              key={tip.id}
+                              className="p-5 rounded-2xl border border-neutral-200/80 bg-white hover:border-amber-400 hover:shadow-md transition-all flex items-start gap-4"
+                           >
+                              <span className="text-2xl p-2.5 bg-neutral-50 rounded-2xl border border-neutral-100 shrink-0">
+                                 {tip.icon}
+                              </span>
+                              <div className="space-y-1 flex-1 min-w-0">
+                                 <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] uppercase font-bold tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60">
+                                       {tip.badge}
+                                    </span>
+                                    <span className="text-xs font-bold text-neutral-300">Tip #{tip.id}</span>
+                                 </div>
+                                 <p className="text-xs sm:text-sm text-neutral-700 leading-relaxed pt-1">
+                                    {tip.text}
+                                 </p>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+               ) : loading ? (
                   <div className="py-12 text-center text-sm text-neutral-400 animate-pulse">
                      Cargando recordatorios...
                   </div>
