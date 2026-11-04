@@ -9,8 +9,8 @@ import { apiFetch, errorMessage } from '@/lib/api';
 const DOG_IMAGE_SRC = '/images/perrito-collar.png';
 
 const CONTACT_INFO = [
-   { icon: Phone, text: '920 676 304' },
-   { icon: Mail, text: 'petconnect969@gmail.com' },
+   { icon: Phone, text: '920 676 304', href: 'https://wa.me/message/PGZHJRYMDGIAG1' },
+   { icon: Mail, text: 'petconnect969@gmail.com', href: 'mailto:petconnect969@gmail.com' },
    { icon: MapPin, text: 'Trujillo, La Libertad - Perú' },
 ];
 
@@ -42,9 +42,24 @@ function TikTokIcon({ className }: { className?: string }) {
 }
 
 const SOCIALS = [
-   { name: 'Instagram', href: '#', icon: InstagramIcon, color: 'bg-pink-500 hover:bg-pink-600' },
-   { name: 'WhatsApp', href: '#', icon: MessageCircle, color: 'bg-green-500 hover:bg-green-600' },
-   { name: 'TikTok', href: '#', icon: TikTokIcon, color: 'bg-neutral-950 hover:bg-neutral-700' },
+   {
+      name: 'WhatsApp',
+      href: 'https://wa.me/message/PGZHJRYMDGIAG1',
+      icon: MessageCircle,
+      color: 'bg-green-500 hover:bg-green-600',
+   },
+   {
+      name: 'TikTok',
+      href: 'https://www.tiktok.com/@petconnect2026',
+      icon: TikTokIcon,
+      color: 'bg-neutral-950 hover:bg-neutral-700',
+   },
+   {
+      name: 'Instagram',
+      href: 'https://www.instagram.com/petconnect.trujillo?utm_source=qr&dlrf=MXRrMmE0cXVtZHB4NA==',
+      icon: InstagramIcon,
+      color: 'bg-pink-500 hover:bg-pink-600',
+   },
 ];
 
 export default function ContactSection() {
@@ -110,12 +125,23 @@ export default function ContactSection() {
                </div>
 
                <ul className="space-y-3 pt-2 text-left">
-                  {CONTACT_INFO.map(({ icon: Icon, text }) => (
+                  {CONTACT_INFO.map(({ icon: Icon, text, href }) => (
                      <li key={text} className="flex items-center gap-3 text-xs sm:text-sm text-neutral-700">
                         <span className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
                            <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                         </span>
-                        <span>{text}</span>
+                        {href ? (
+                           <a
+                              href={href}
+                              target={href.startsWith('http') ? '_blank' : undefined}
+                              rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                              className="hover:text-pink-600 transition font-medium"
+                           >
+                              {text}
+                           </a>
+                        ) : (
+                           <span>{text}</span>
+                        )}
                      </li>
                   ))}
                </ul>
