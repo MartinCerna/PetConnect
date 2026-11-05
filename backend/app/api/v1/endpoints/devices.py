@@ -70,3 +70,43 @@ def link_device_to_pet(
     pet.device_id = device.id
     db.commit()
     return {"status": "success", "message": f"Dispositivo {device.device_mac} vinculado exitosamente a {pet.name}."}
+
+@router.put("/{device_id}/unlink", status_code=status.HTTP_200_OK)
+def unlink_device(
+    device_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Desvincula un dispositivo ESP32 de cualquier mascota a la que esté asociado.
+    """
+    device = db.query(Device).filter(Device.id == device_id, Device.user_id == current_user.id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Dispositivo no encontrado o no autorizado.")
+
+    pets = db.query(Pet).filter(Pet.device_id == device.id, Pet.user_id == current_user.id).all()
+    for p in pets:
+        p.device_id = None
+    db.commit()
+    return {"status": "success", "message": f"Dispositivo {device.device_mac} desvinculado exitosamente."}
+
+@router.delete("/{device_id}", status_code=status.HTTP_200_OK)
+def delete_device(
+    device_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Elimina un dispositivo ESP32 registrado.
+    """
+    device = db.query(Device).filter(Device.id == device_id, Device.user_id == current_user.id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Dispositivo no encontrado o no autorizado.")
+
+    pets = db.query(Pet).filter(Pet.device_id == device.id, Pet.user_id == current_user.id).all()
+    for p in pets:
+        p.device_id = None
+
+    db.delete(device)
+    db.commit()
+    return {"status": "success", "message": f"Dispositivo {device.device_mac} eliminado exitosamente."}

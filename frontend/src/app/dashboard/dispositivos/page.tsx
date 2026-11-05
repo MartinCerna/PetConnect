@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch, errorMessage } from '@/lib/api';
-import { Cpu, Link as LinkIcon } from 'lucide-react';
+import { Cpu, Link as LinkIcon, Trash2 } from 'lucide-react';
 
 interface DeviceItem {
    id: string;
@@ -73,18 +73,60 @@ export default function DispositivosPage() {
 
    const handleLink = async (deviceId: string, petId: string) => {
       if (!petId) return;
+      setError('');
+      setSuccessMsg('');
       try {
          const res = await apiFetch(`/devices/${deviceId}/link/${petId}`, {
             method: 'PUT',
          });
          if (res.ok) {
-            alert('¡Dispositivo vinculado a la mascota!');
+            setSuccessMsg('¡Dispositivo vinculado a la mascota!');
             if (token) loadUserData(token);
+            fetchDevices();
          } else {
-            alert(await errorMessage(res, 'Error al vincular dispositivo.'));
+            setError(await errorMessage(res, 'Error al vincular dispositivo.'));
          }
       } catch {
-         alert('Error al conectar con el servidor.');
+         setError('Error al conectar con el servidor.');
+      }
+   };
+
+   const handleUnlink = async (deviceId: string) => {
+      setError('');
+      setSuccessMsg('');
+      try {
+         const res = await apiFetch(`/devices/${deviceId}/unlink`, {
+            method: 'PUT',
+         });
+         if (res.ok) {
+            setSuccessMsg('Dispositivo desvinculado con éxito.');
+            if (token) loadUserData(token);
+            fetchDevices();
+         } else {
+            setError(await errorMessage(res, 'Error al desvincular dispositivo.'));
+         }
+      } catch {
+         setError('Error al conectar con el servidor.');
+      }
+   };
+
+   const handleDeleteDevice = async (deviceId: string, macAddr: string) => {
+      if (!confirm(`¿Estás seguro de que deseas eliminar el tag ${macAddr}?`)) return;
+      setError('');
+      setSuccessMsg('');
+      try {
+         const res = await apiFetch(`/devices/${deviceId}`, {
+            method: 'DELETE',
+         });
+         if (res.ok) {
+            setSuccessMsg(`Tag ${macAddr} eliminado.`);
+            if (token) loadUserData(token);
+            fetchDevices();
+         } else {
+            setError(await errorMessage(res, 'Error al eliminar dispositivo.'));
+         }
+      } catch {
+         setError('Error al conectar con el servidor.');
       }
    };
 
@@ -176,15 +218,24 @@ export default function DispositivosPage() {
                                     Registrado: {new Date(dev.created_at).toLocaleDateString()}
                                  </p>
                               </div>
-                              <span
-                                 className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                                    dev.status === 'ACTIVE'
-                                       ? 'bg-green-100 text-green-700'
-                                       : 'bg-neutral-100 text-neutral-600'
-                                 }`}
-                              >
-                                 {dev.status}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                 <span
+                                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                                       dev.status === 'ACTIVE'
+                                          ? 'bg-green-100 text-green-700'
+                                          : 'bg-neutral-100 text-neutral-600'
+                                    }`}
+                                 >
+                                    {dev.status}
+                                 </span>
+                                 <button
+                                    onClick={() => handleDeleteDevice(dev.id, dev.device_mac)}
+                                    title="Eliminar Tag"
+                                    className="p-1 text-neutral-400 hover:text-red-500 rounded-lg hover:bg-neutral-100 transition"
+                                 >
+                                    <Trash2 className="w-4 h-4" />
+                                 </button>
+                              </div>
                            </div>
 
                            <div className="pt-3 border-t border-neutral-100 flex items-center justify-between gap-3">
@@ -194,18 +245,29 @@ export default function DispositivosPage() {
                               </span>
 
                               <select
-                                 defaultValue=""
-                                 onChange={(e) => handleLink(dev.id, e.target.value)}
+                                 value={currentPet ? currentPet.id : ''}
+                                 onChange={(e) => {
+                                    if (e.target.value === '__unlink__') {
+                                       handleUnlink(dev.id);
+                                    } else if (e.target.value) {
+                                       handleLink(dev.id, e.target.value);
+                                    }
+                                 }}
                                  className="text-xs border border-neutral-200 bg-neutral-50 p-1.5 rounded-lg text-neutral-700 focus:outline-none focus:ring-1 focus:ring-sky-400"
                               >
-                                 <option value="" disabled>
-                                    Asignar a mascota...
+                                 <option value="" disabled={!currentPet}>
+                                    {currentPet ? 'Cambiar mascota...' : 'Asignar a mascota...'}
                                  </option>
                                  {userPets.map((p) => (
                                     <option key={p.id} value={p.id}>
                                        {p.name}
                                     </option>
                                  ))}
+                                 {currentPet && (
+                                    <option value="__unlink__" className="text-red-600 font-medium">
+                                       ✕ Desvincular de {currentPet.name}
+                                    </option>
+                                 )}
                               </select>
                            </div>
                         </div>
@@ -217,4 +279,3 @@ export default function DispositivosPage() {
       </div>
    );
 }
-
