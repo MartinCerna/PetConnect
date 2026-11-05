@@ -26,6 +26,7 @@
 # SOFTWARE.
 
 """Constants module."""
+import os
 
 GCM_REGISTER_URL = "https://android.clients.google.com/c2dm/register3"
 GCM_CHECKIN_URL = "https://android.clients.google.com/checkin"
@@ -54,6 +55,6 @@ DOORBELLS_ENDPOINT = "/clients_api/doorbots/{0}"
 
 MCS_VERSION = 41
 MCS_HOST = "mtalk.google.com"
-MCS_PORT = 5228
+MCS_PORT = int(os.getenv("MCS_PORT", "443"))
 MCS_SELECTIVE_ACK_ID = 12
 MCS_STREAM_ACK_ID = 13

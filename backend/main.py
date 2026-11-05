@@ -27,10 +27,13 @@ async def tarea_sincronizacion_continua(intervalo_segundos: int = 180):
     await asyncio.sleep(5)  # Espera a que la API inicie completamente
     while True:
         try:
-            print("\n[Auto-Sync] Consultando nuevas ubicaciones a Google Find My...")
-            await asyncio.to_thread(ejecutar_sincronizacion_google)
+            print("\n[Auto-Sync] Consultando nuevas ubicaciones a Google Find My...", flush=True)
+            await asyncio.wait_for(asyncio.to_thread(ejecutar_sincronizacion_google), timeout=60)
+            print("[Auto-Sync] Ciclo de consulta completado.", flush=True)
+        except asyncio.TimeoutError:
+            print("[Auto-Sync] Advertencia: Tiempo de espera agotado (60s). Se reintentará en el próximo ciclo.", flush=True)
         except Exception as e:
-            print(f"[Auto-Sync] Error: {e}")
+            print(f"[Auto-Sync] Error en ciclo: {e}", flush=True)
         await asyncio.sleep(intervalo_segundos)
 
 

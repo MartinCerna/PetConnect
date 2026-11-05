@@ -24,12 +24,12 @@ def ejecutar_sincronizacion_google():
             device_list = parse_device_list_protobuf(result_hex)
             refresh_custom_trackers(device_list)
         except Exception as err:
-            print(f"[Worker] Nota al verificar vigencia de llaves en Google: {err}")
+            print(f"[Worker] Nota al verificar vigencia de llaves en Google: {err}", flush=True)
 
         # Solicita y descifra la ubicación reportada
         get_location_data_for_device(CANONIC_ID, DEVICE_NAME)
     except Exception as e:
-        print(f"[Worker] Error al obtener ubicación de Google: {e}")
+        print(f"[Worker] Error al obtener ubicación de Google: {e}", flush=True)
 
 if __name__ == '__main__':
     ejecutar_sincronizacion_google()
