@@ -49,7 +49,9 @@ async def lifespan(app: FastAPI):
 
     task = None
     if ENABLE_GOOGLE_SYNC:
-        task = asyncio.create_task(tarea_sincronizacion_continua(intervalo_segundos=180))
+        intervalo = int(os.getenv("SYNC_INTERVAL_SECONDS", "180"))
+        task = asyncio.create_task(tarea_sincronizacion_continua(intervalo_segundos=intervalo))
+        print(f"[Auto-Sync] Tarea de sincronización continua iniciada cada {intervalo} segundos.")
     yield
     if task:
         task.cancel()

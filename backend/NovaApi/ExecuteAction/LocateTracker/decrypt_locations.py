@@ -27,13 +27,15 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
             device = db.query(Device).filter(Device.status == "ACTIVE").order_by(Device.created_at.desc()).first()
 
         if device:
+            dev_id = device.id
+            dev_mac = device.device_mac
             try:
                 dt = datetime.datetime.fromisoformat(timestamp_str)
             except Exception:
                 dt = datetime.datetime.utcnow()
 
             log = LocationLog(
-                device_id=device.id,
+                device_id=dev_id,
                 latitude=float(latitude),
                 longitude=float(longitude),
                 altitude=float(altitude) if altitude else 0.0,
@@ -43,7 +45,7 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
             db.add(log)
             db.commit()
             db.close()
-            print(f" => Coordenada guardada en BD Supabase para {device.device_mac} ({device.id}).")
+            print(f" => Coordenada guardada en BD Supabase para {dev_mac} ({dev_id}).")
             return
     except Exception as e:
         print(f" => Inserción directa en BD omitida: {e}")

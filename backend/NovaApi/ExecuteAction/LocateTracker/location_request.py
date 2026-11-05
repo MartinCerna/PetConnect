@@ -51,8 +51,13 @@ def get_location_data_for_device(canonic_device_id, name):
     hex_payload = create_location_request(canonic_device_id, fcm_token, request_uuid)
     nova_request(NOVA_ACTION_API_SCOPE, hex_payload)
 
+    start_time = time.time()
+    timeout_seconds = 30
     while result is None:
-        time.sleep(0.1)
+        if time.time() - start_time > timeout_seconds:
+            print(f'[LocationRequest] Tiempo de espera agotado ({timeout_seconds}s) esperando respuesta FCM de Google.')
+            return
+        time.sleep(0.2)
 
     decrypt_location_response_locations(result)
 

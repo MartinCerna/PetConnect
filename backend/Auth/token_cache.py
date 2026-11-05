@@ -9,9 +9,7 @@ import os
 SECRETS_FILE = 'secrets.json'
 
 def get_cached_value_or_set(name: str, generator: callable):
-
     existing_value = get_cached_value(name)
-
     if existing_value is not None:
         return existing_value
 
@@ -20,37 +18,70 @@ def get_cached_value_or_set(name: str, generator: callable):
     return value
 
 
-def get_cached_value(name: str):
+def _get_secrets_file():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(script_dir, SECRETS_FILE)
+
+
+def _ensure_secrets_file():
     secrets_file = _get_secrets_file()
+    if not os.path.exists(secrets_file):
+        env_secrets = os.getenv("GOOGLE_FINDMY_SECRETS")
+        if env_secrets:
+            try:
+                data = json.loads(env_secrets)
+                with open(secrets_file, 'w', encoding='utf-8') as file:
+                    json.dump(data, file)
+                print("[TokenCache] Archivo secrets.json generado exitosamente desde variable de entorno.")
+            except Exception as e:
+                print(f"[TokenCache] Error al parsear GOOGLE_FINDMY_SECRETS: {e}")
+    return secrets_file
+
+
+def get_cached_value(name: str):
+    secrets_file = _ensure_secrets_file()
 
     if os.path.exists(secrets_file):
-        with open(secrets_file, 'r') as file:
+        with open(secrets_file, 'r', encoding='utf-8') as file:
             try:
                 data = json.load(file)
                 value = data.get(name)
                 if value:
                     return value
             except json.JSONDecodeError:
-                return None
+                pass
+
+    # Fallback directo a variable de entorno si el archivo no existe o no se pudo leer
+    env_secrets = os.getenv("GOOGLE_FINDMY_SECRETS")
+    if env_secrets:
+        try:
+            data = json.loads(env_secrets)
+            return data.get(name)
+        except Exception:
+            return None
+
     return None
 
 
 def set_cached_value(name: str, value: str):
-    secrets_file = _get_secrets_file()
+    secrets_file = _ensure_secrets_file()
 
+    data = {}
     if os.path.exists(secrets_file):
-        with open(secrets_file, 'r') as file:
+        with open(secrets_file, 'r', encoding='utf-8') as file:
             try:
                 data = json.load(file)
             except json.JSONDecodeError:
-                raise Exception("Could not read secrets file. Aborting.")
-    else:
-        data = {}
+                data = {}
+    elif os.getenv("GOOGLE_FINDMY_SECRETS"):
+        try:
+            data = json.loads(os.getenv("GOOGLE_FINDMY_SECRETS"))
+        except Exception:
+            data = {}
+
     data[name] = value
-    with open(secrets_file, 'w') as file:
-        json.dump(data, file)
-
-
-def _get_secrets_file():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(script_dir, SECRETS_FILE)
+    try:
+        with open(secrets_file, 'w', encoding='utf-8') as file:
+            json.dump(data, file)
+    except Exception as e:
+        print(f"[TokenCache] Advertencia: No se pudo escribir en secrets.json ({e}).")
