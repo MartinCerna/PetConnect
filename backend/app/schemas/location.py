@@ -4,7 +4,8 @@ from uuid import UUID
 from datetime import datetime
 
 class LocationCreate(BaseModel):
-    device_id: UUID = Field(..., description="ID (UUID) del dispositivo ESP32")
+    device_id: Optional[UUID] = Field(default=None, description="ID (UUID) del dispositivo ESP32")
+    device_mac: Optional[str] = Field(default=None, description="Dirección MAC del dispositivo")
     latitude: float = Field(..., example=-12.046374, description="Latitud GPS")
     longitude: float = Field(..., example=-77.042793, description="Longitud GPS")
     altitude: Optional[float] = Field(default=0.0, example=10.5, description="Altitud en metros")

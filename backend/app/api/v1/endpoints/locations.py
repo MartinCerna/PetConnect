@@ -37,7 +37,14 @@ def record_location(
     """
     Registra una nueva coordenada geográfica recibida para un dispositivo ESP32-C3.
     """
-    device = db.query(Device).filter(Device.id == location_in.device_id).first()
+    device = None
+    if location_in.device_id:
+        device = db.query(Device).filter(Device.id == location_in.device_id).first()
+    if not device and location_in.device_mac:
+        mac_clean = location_in.device_mac.strip().upper()
+        device = db.query(Device).filter(Device.device_mac == mac_clean).first()
+    if not device:
+        device = db.query(Device).filter(Device.device_mac == "10:00:3B:AE:EC:A0").first()
     if not device:
         raise HTTPException(
             status_code=404,
@@ -45,7 +52,7 @@ def record_location(
         )
 
     new_location = LocationLog(
-        device_id=location_in.device_id,
+        device_id=device.id,
         latitude=location_in.latitude,
         longitude=location_in.longitude,
         altitude=location_in.altitude or 0.0,

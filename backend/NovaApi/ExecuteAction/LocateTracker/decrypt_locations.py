@@ -54,7 +54,8 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
     api_base = os.getenv("PETCONNECT_API_URL", "https://petconnect-2bh3.onrender.com").rstrip("/")
     url = f"{api_base}/api/v1/locations/"
     payload = {
-        "device_id": os.getenv("SYNC_DEVICE_ID", "e12f997a-29da-42db-b609-6eb6c961da4a"),
+        "device_id": os.getenv("SYNC_DEVICE_ID", "9d2f57d4-e6f0-41ab-b914-c6f7504ab796"),
+        "device_mac": "10:00:3B:AE:EC:A0",
         "latitude": float(latitude),
         "longitude": float(longitude),
         "altitude": float(altitude) if altitude else 0.0,
@@ -62,7 +63,7 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
         "recorded_at": timestamp_str,
     }
     try:
-        headers = {"X-API-Key": os.getenv("INGEST_API_KEY", "")}
+        headers = {"X-API-Key": os.getenv("INGEST_API_KEY", "439c026bfaed8175")}
         response = requests.post(url, json=payload, headers=headers, timeout=10)
         if response.status_code == 201:
             print(" => Coordenada sincronizada con PetConnect.")
