@@ -12,6 +12,64 @@ from app.core.email import send_reminder_email
 router = APIRouter()
 
 
+@router.get("/debug-email")
+def debug_email_delivery(to: str = "petconnect969@gmail.com"):
+    import os
+    import requests
+    results = {"target_recipient": to}
+    
+    # 1. Resend
+    resend_key = os.getenv("RESEND_API_KEY", "").strip()
+    results["resend_configured"] = bool(resend_key)
+    if resend_key:
+        try:
+            sender = os.getenv("EMAILS_FROM", "PetConnect <onboarding@resend.dev>")
+            r = requests.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                json={"from": sender, "to": [to], "subject": "Prueba PetConnect Resend", "text": "Mensaje de prueba PetConnect."},
+                timeout=8
+            )
+            try:
+                body = r.json()
+            except Exception:
+                body = r.text
+            results["resend_response"] = {"status": r.status_code, "body": body}
+        except Exception as e:
+            results["resend_error"] = str(e)
+
+    # 2. Brevo
+    brevo_key = os.getenv("BREVO_API_KEY", "").strip()
+    results["brevo_configured"] = bool(brevo_key)
+    if brevo_key:
+        try:
+            sender_email = os.getenv("SMTP_USER", "petconnect969@gmail.com").strip()
+            r = requests.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={"api-key": brevo_key, "Content-Type": "application/json"},
+                json={
+                    "sender": {"name": "PetConnect", "email": sender_email},
+                    "to": [{"email": to}],
+                    "subject": "Prueba PetConnect Brevo",
+                    "textContent": "Mensaje de prueba PetConnect.",
+                },
+                timeout=8
+            )
+            try:
+                body = r.json()
+            except Exception:
+                body = r.text
+            results["brevo_response"] = {"status": r.status_code, "body": body}
+        except Exception as e:
+            results["brevo_error"] = str(e)
+
+    # 3. SMTP env vars
+    results["smtp_user"] = os.getenv("SMTP_USER", "")
+    results["smtp_pass_configured"] = bool(os.getenv("SMTP_PASSWORD", ""))
+    
+    return results
+
+
 @router.get("/", response_model=List[ReminderResponse])
 def list_reminders(
     category: Optional[str] = Query(None, description="Filtrar por categoría"),
