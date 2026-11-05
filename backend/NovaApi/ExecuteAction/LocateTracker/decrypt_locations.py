@@ -14,18 +14,54 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
-    url = "http://127.0.0.1:8000/api/v1/locations/"
+    # 1. Intento directo en la base de datos de Supabase
+    try:
+        import sys
+        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
+        from app.db.session import SessionLocal
+        from app.db.models import Device, LocationLog
+
+        db = SessionLocal()
+        device = db.query(Device).filter(Device.device_mac == "10:00:3B:AE:EC:A0").first()
+        if not device:
+            device = db.query(Device).filter(Device.status == "ACTIVE").order_by(Device.created_at.desc()).first()
+
+        if device:
+            try:
+                dt = datetime.datetime.fromisoformat(timestamp_str)
+            except Exception:
+                dt = datetime.datetime.utcnow()
+
+            log = LocationLog(
+                device_id=device.id,
+                latitude=float(latitude),
+                longitude=float(longitude),
+                altitude=float(altitude) if altitude else 0.0,
+                battery_level=100,
+                recorded_at=dt,
+            )
+            db.add(log)
+            db.commit()
+            db.close()
+            print(f" => Coordenada guardada en BD Supabase para {device.device_mac} ({device.id}).")
+            return
+    except Exception as e:
+        print(f" => Inserción directa en BD omitida: {e}")
+
+    # 2. Respaldo vía HTTP API (Render o local)
+    api_base = os.getenv("PETCONNECT_API_URL", "https://petconnect-2bh3.onrender.com").rstrip("/")
+    url = f"{api_base}/api/v1/locations/"
     payload = {
-        "device_id": "70b6c9b2-8237-43f0-93fc-7106a88aedb3",  # UUID de prueba de Thor
-        "latitude": latitude,
-        "longitude": longitude,
-        "altitude": altitude,
+        "device_id": os.getenv("SYNC_DEVICE_ID", "e12f997a-29da-42db-b609-6eb6c961da4a"),
+        "latitude": float(latitude),
+        "longitude": float(longitude),
+        "altitude": float(altitude) if altitude else 0.0,
         "battery_level": 100,
-        "recorded_at": timestamp_str
+        "recorded_at": timestamp_str,
     }
     try:
         headers = {"X-API-Key": os.getenv("INGEST_API_KEY", "")}
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
         if response.status_code == 201:
             print(" => Coordenada sincronizada con PetConnect.")
         else:
