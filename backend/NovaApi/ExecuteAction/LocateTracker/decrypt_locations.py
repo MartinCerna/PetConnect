@@ -221,11 +221,12 @@ def decrypt_location_response_locations(device_update_protobuf):
         print("-" * 40)
         #################
         # --- NUEVA LÍNEA PARA ENVIAR DATOS A PETCONNECT ---
+        dt_utc = datetime.datetime.fromtimestamp(loc.time, tz=datetime.timezone.utc)
         enviar_a_petconnect(
             latitude=latitude, 
             longitude=longitude, 
             altitude=altitude, 
-            timestamp_str=datetime.datetime.fromtimestamp(loc.time).isoformat() + "Z"
+            timestamp_str=dt_utc.isoformat()
         )
         #######################
     pass

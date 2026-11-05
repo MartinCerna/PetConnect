@@ -190,3 +190,4 @@ El equipo de PetConnect 🐾
     except Exception as e:
         print(f"[Email] ⚠️ No se pudo enviar el correo a {recipient_email}: {e}")
         return False
+
