@@ -37,6 +37,70 @@ async def tarea_sincronizacion_continua(intervalo_segundos: int = 180):
         await asyncio.sleep(intervalo_segundos)
 
 
+HISTORIAL_ALERTAS_DISPARADAS = set()
+
+
+async def tarea_verificacion_alertas_recordatorios(intervalo_segundos: int = 60):
+    """
+    Verifica cada 60 segundos si algún recordatorio activo coincide con la hora actual
+    para despachar la alerta por correo electrónico al dueño de la mascota en tiempo real.
+    """
+    from datetime import datetime, timezone, timedelta
+    from app.db.session import SessionLocal
+    from app.db.models import Reminder
+    from app.core.email import send_reminder_due_alert_email
+
+    await asyncio.sleep(10)
+    print("[Alertas-Recordatorios] Tarea en segundo plano iniciada (monitoreo cada 60s).", flush=True)
+
+    while True:
+        try:
+            # Hora actual en Perú (UTC-5)
+            now_local = datetime.now(timezone.utc) - timedelta(hours=5)
+            hora_actual = now_local.strftime("%H:%M")
+            fecha_hoy = now_local.strftime("%Y-%m-%d")
+
+            db = SessionLocal()
+            recordatorios_activos = (
+                db.query(Reminder)
+                .filter(Reminder.is_active == True, Reminder.is_completed == False)
+                .all()
+            )
+
+            for r in recordatorios_activos:
+                if not r.time_schedule or not r.user or not r.user.email:
+                    continue
+
+                horario = r.time_schedule.strip()
+                if horario == hora_actual or horario.startswith(hora_actual):
+                    clave_alerta = (str(r.id), fecha_hoy, hora_actual)
+                    if clave_alerta not in HISTORIAL_ALERTAS_DISPARADAS:
+                        HISTORIAL_ALERTAS_DISPARADAS.add(clave_alerta)
+                        pet_name = r.pet.name if r.pet else "Tu mascota"
+                        owner_name = r.user.full_name or "Dueño"
+                        print(
+                            f"[Alertas-Recordatorios] ¡Enviando alerta en tiempo real a {r.user.email} "
+                            f"para '{r.title}' ({pet_name}) a las {hora_actual}!",
+                            flush=True,
+                        )
+                        await asyncio.to_thread(
+                            send_reminder_due_alert_email,
+                            recipient_email=r.user.email,
+                            owner_name=owner_name,
+                            pet_name=pet_name,
+                            title=r.title,
+                            category=r.category,
+                            time_schedule=r.time_schedule,
+                            notes=r.notes,
+                        )
+
+            db.close()
+        except Exception as e:
+            print(f"[Alertas-Recordatorios] Error: {e}", flush=True)
+
+        await asyncio.sleep(intervalo_segundos)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Crea tablas nuevas y asegura columnas si no existen en la base de datos
@@ -54,10 +118,17 @@ async def lifespan(app: FastAPI):
     if ENABLE_GOOGLE_SYNC:
         intervalo = int(os.getenv("SYNC_INTERVAL_SECONDS", "180"))
         task = asyncio.create_task(tarea_sincronizacion_continua(intervalo_segundos=intervalo))
-        print(f"[Auto-Sync] Tarea de sincronización continua iniciada cada {intervalo} segundos.")
+        print(f"[Auto-Sync] Tarea de sincronización continua iniciada cada {intervalo} segundos.", flush=True)
+
+    # Inicia tarea de verificación de alertas de recordatorios en tiempo real
+    task_reminders = asyncio.create_task(tarea_verificacion_alertas_recordatorios(intervalo_segundos=60))
+
     yield
+
     if task:
         task.cancel()
+    if task_reminders:
+        task_reminders.cancel()
 
 
 app = FastAPI(

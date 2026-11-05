@@ -18,152 +18,16 @@ CATEGORY_NAMES = {
 }
 
 
-def send_reminder_email(
-    recipient_email: str,
-    owner_name: str,
-    pet_name: str,
-    title: str,
-    category: str,
-    frequency: Optional[str] = None,
-    time_schedule: Optional[str] = None,
-    notes: Optional[str] = None,
-) -> bool:
-    """
-    Envía una notificación por correo electrónico vía SMTP (Gmail u otro)
-    cuando se crea o programa un recordatorio de mascota.
-    """
-    if not recipient_email:
-        print("[Email] Error: No se proporcionó correo de destinatario.")
-        return False
-
-    smtp_user = os.getenv("SMTP_USER", SMTP_USER)
-    smtp_pass = os.getenv("SMTP_PASSWORD", SMTP_PASSWORD)
-    smtp_host = os.getenv("SMTP_HOST", SMTP_HOST)
+def _send_smtp_message(recipient_email: str, subject: str, text_content: str, html_content: str) -> bool:
+    """Función base para despachar correos por SMTP TLS o SSL."""
+    smtp_user = os.getenv("SMTP_USER", SMTP_USER).strip()
+    smtp_pass = os.getenv("SMTP_PASSWORD", SMTP_PASSWORD).strip()
+    smtp_host = os.getenv("SMTP_HOST", SMTP_HOST).strip()
     smtp_port = int(os.getenv("SMTP_PORT", str(SMTP_PORT)))
-
-    category_label = CATEGORY_NAMES.get(category.lower(), f"📋 {category.capitalize()}")
-    frequency_text = frequency if frequency else "Puntual / Según horario"
-    schedule_text = time_schedule if time_schedule else "Pendiente de definir"
-    notes_text = notes if notes else "Sin instrucciones adicionales"
-    greeting_name = owner_name.strip() if owner_name and owner_name.strip() else "Amigo de PetConnect"
-
-    subject = f"🐾 Nuevo Recordatorio para {pet_name}: {title}"
-
-    # Versión en texto plano
-    text_content = f"""Hola {greeting_name},
-
-Has programado un nuevo recordatorio en PetConnect para tu mascota {pet_name}:
-
-• Título: {title}
-• Categoría: {category_label}
-• Horario: {schedule_text}
-• Frecuencia: {frequency_text}
-• Notas/Dosis: {notes_text}
-
-Puedes revisar y gestionar tus recordatorios en:
-https://pet-connect-flame.vercel.app/dashboard/recordatorios
-
-Atentamente,
-El equipo de PetConnect 🐾
-"""
-
-    # Versión HTML moderna y estilizada
-    html_content = f"""<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{subject}</title>
-</head>
-<body style="margin: 0; padding: 0; background-color: #f4f6f8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1f2937;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f6f8; padding: 30px 15px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" style="max-width: 580px; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;" cellspacing="0" cellpadding="0">
-          
-          <!-- Encabezado con degradado y marca -->
-          <tr>
-            <td style="background: linear-gradient(135deg, #e11d48 0%, #db2777 50%, #f43f5e 100%); padding: 32px 30px; text-align: center;">
-              <h1 style="margin: 0; color: #ffffff; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">🐾 PetConnect</h1>
-              <p style="margin: 6px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px; font-weight: 500;">Cuidando la salud y el bienestar de tu mascota</p>
-            </td>
-          </tr>
-
-          <!-- Cuerpo del correo -->
-          <tr>
-            <td style="padding: 32px 30px 24px 30px;">
-              <p style="margin: 0 0 16px 0; font-size: 17px; line-height: 1.5; color: #111827;">
-                ¡Hola, <strong style="color: #e11d48;">{greeting_name}</strong>! 👋
-              </p>
-              <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.5; color: #4b5563;">
-                Se ha registrado y programado un nuevo recordatorio para tu mascota <strong>{pet_name}</strong>. Aquí tienes el resumen de la actividad:
-              </p>
-
-              <!-- Tarjeta de Detalles -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #fdf2f4; border: 1px solid #fbcfe8; border-radius: 14px; padding: 20px; margin-bottom: 24px;">
-                <tr>
-                  <td style="padding: 6px 0; font-size: 14px; color: #6b7280; width: 35%;"><strong>Actividad:</strong></td>
-                  <td style="padding: 6px 0; font-size: 15px; color: #111827; font-weight: 700;">{title}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Categoría:</strong></td>
-                  <td style="padding: 6px 0; font-size: 14px; color: #db2777; font-weight: 600;">{category_label}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Mascota:</strong></td>
-                  <td style="padding: 6px 0; font-size: 14px; color: #111827;">{pet_name}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Horario / Fecha:</strong></td>
-                  <td style="padding: 6px 0; font-size: 14px; color: #111827; font-weight: 600;">{schedule_text}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Frecuencia:</strong></td>
-                  <td style="padding: 6px 0; font-size: 14px; color: #111827;">{frequency_text}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-size: 14px; color: #6b7280; vertical-align: top;"><strong>Indicaciones:</strong></td>
-                  <td style="padding: 6px 0; font-size: 14px; color: #374151; font-style: italic;">{notes_text}</td>
-                </tr>
-              </table>
-
-              <!-- Botón de Acción -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 28px 0 16px 0;">
-                <tr>
-                  <td align="center">
-                    <a href="https://pet-connect-flame.vercel.app/dashboard/recordatorios" target="_blank" style="display: inline-block; background-color: #e11d48; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 32px; border-radius: 12px; box-shadow: 0 4px 12px rgba(225, 29, 72, 0.35);">
-                      Ver mis Recordatorios en PetConnect →
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <p style="margin: 20px 0 0 0; font-size: 12px; color: #9ca3af; text-align: center; line-height: 1.4;">
-                💡 <em>Tip PetConnect: Mantener al día sus vacunas y medicamentos prolonga la calidad de vida de tu mascota.</em>
-              </p>
-            </td>
-          </tr>
-
-          <!-- Pie de página -->
-          <tr>
-            <td style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #f3f4f6;">
-              <p style="margin: 0; font-size: 12px; color: #9ca3af;">
-                Notificación automática enviada a <strong>{recipient_email}</strong>.<br>
-                PetConnect © 2026. Todos los derechos reservados.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-"""
 
     if not smtp_user or not smtp_pass:
         print(f"[Email Simulado] No se configuró SMTP_USER/SMTP_PASSWORD. "
-              f"Notificación para {recipient_email}: '{title}' para {pet_name} registrada en logs.")
+              f"Para: {recipient_email} | Asunto: '{subject}' registrado en logs.", flush=True)
         return True
 
     try:
@@ -185,9 +49,189 @@ El equipo de PetConnect 🐾
                 server.login(smtp_user, smtp_pass)
                 server.sendmail(smtp_user, [recipient_email], msg.as_string())
 
-        print(f"[Email] ✅ Notificación enviada exitosamente a {recipient_email} para recordatorio '{title}'.")
+        print(f"[Email] ✅ Correo enviado exitosamente a {recipient_email}: '{subject}'.", flush=True)
         return True
     except Exception as e:
-        print(f"[Email] ⚠️ No se pudo enviar el correo a {recipient_email}: {e}")
+        print(f"[Email] ⚠️ Error enviando correo a {recipient_email}: {e}", flush=True)
         return False
 
+
+def send_reminder_email(
+    recipient_email: str,
+    owner_name: str,
+    pet_name: str,
+    title: str,
+    category: str,
+    frequency: Optional[str] = None,
+    time_schedule: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> bool:
+    """Notificación enviada inmediatamente al configurar o crear un recordatorio."""
+    if not recipient_email:
+        return False
+
+    category_label = CATEGORY_NAMES.get(category.lower(), f"📋 {category.capitalize()}")
+    frequency_text = frequency if frequency else "Puntual / Según horario"
+    schedule_text = time_schedule if time_schedule else "Pendiente de definir"
+    notes_text = notes if notes else "Sin instrucciones adicionales"
+    greeting_name = owner_name.strip() if owner_name and owner_name.strip() else "Amigo de PetConnect"
+
+    subject = f"🐾 Recordatorio Programado para {pet_name}: {title}"
+
+    text_content = f"""Hola {greeting_name},
+
+Has programado un nuevo recordatorio en PetConnect para {pet_name}:
+
+• Actividad: {title}
+• Categoría: {category_label}
+• Horario programado: {schedule_text}
+• Frecuencia: {frequency_text}
+• Notas/Dosis: {notes_text}
+
+Gestiona tus recordatorios en:
+https://pet-connect-flame.vercel.app/dashboard/recordatorios
+
+Atentamente,
+PetConnect 🐾
+"""
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>{subject}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f6f8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1f2937;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding: 30px 15px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 580px; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,0.06); border: 1px solid #e5e7eb;">
+          <tr>
+            <td style="background: linear-gradient(135deg, #e11d48 0%, #db2777 50%, #f43f5e 100%); padding: 32px 30px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 26px; font-weight: 800;">🐾 PetConnect</h1>
+              <p style="margin: 6px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">Confirmación de Recordatorio Configurado</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 32px 30px 24px 30px;">
+              <p style="margin: 0 0 16px 0; font-size: 17px; color: #111827;">
+                ¡Hola, <strong style="color: #e11d48;">{greeting_name}</strong>! 👋
+              </p>
+              <p style="margin: 0 0 24px 0; font-size: 15px; color: #4b5563; line-height: 1.5;">
+                Has programado con éxito un recordatorio para tu mascota <strong>{pet_name}</strong>. Recibirás un aviso en este correo en el horario programado.
+              </p>
+              <table role="presentation" width="100%" style="background-color: #fdf2f4; border: 1px solid #fbcfe8; border-radius: 14px; padding: 18px; margin-bottom: 24px;">
+                <tr><td style="padding: 5px 0; font-size: 14px; color: #6b7280; width: 35%;"><strong>Actividad:</strong></td><td style="padding: 5px 0; font-size: 15px; color: #111827; font-weight: 700;">{title}</td></tr>
+                <tr><td style="padding: 5px 0; font-size: 14px; color: #6b7280;"><strong>Categoría:</strong></td><td style="padding: 5px 0; font-size: 14px; color: #db2777; font-weight: 600;">{category_label}</td></tr>
+                <tr><td style="padding: 5px 0; font-size: 14px; color: #6b7280;"><strong>Mascota:</strong></td><td style="padding: 5px 0; font-size: 14px; color: #111827;">{pet_name}</td></tr>
+                <tr><td style="padding: 5px 0; font-size: 14px; color: #6b7280;"><strong>Horario:</strong></td><td style="padding: 5px 0; font-size: 14px; color: #111827; font-weight: 600;">{schedule_text}</td></tr>
+                <tr><td style="padding: 5px 0; font-size: 14px; color: #6b7280;"><strong>Frecuencia:</strong></td><td style="padding: 5px 0; font-size: 14px; color: #111827;">{frequency_text}</td></tr>
+                <tr><td style="padding: 5px 0; font-size: 14px; color: #6b7280; vertical-align: top;"><strong>Indicaciones:</strong></td><td style="padding: 5px 0; font-size: 14px; color: #374151;">{notes_text}</td></tr>
+              </table>
+              <div style="text-align: center; margin: 26px 0 10px 0;">
+                <a href="https://pet-connect-flame.vercel.app/dashboard/recordatorios" target="_blank" style="display: inline-block; background-color: #e11d48; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 13px 28px; border-radius: 12px;">
+                  Ver Recordatorios en PetConnect →
+                </a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #f9fafb; padding: 18px 30px; text-align: center; border-top: 1px solid #f3f4f6;">
+              <p style="margin: 0; font-size: 12px; color: #9ca3af;">PetConnect © 2026. Enviado a {recipient_email}.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+    return _send_smtp_message(recipient_email, subject, text_content, html_content)
+
+
+def send_reminder_due_alert_email(
+    recipient_email: str,
+    owner_name: str,
+    pet_name: str,
+    title: str,
+    category: str,
+    time_schedule: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> bool:
+    """Alerta enviada en tiempo real en el momento exacto programado para el recordatorio."""
+    if not recipient_email:
+        return False
+
+    category_label = CATEGORY_NAMES.get(category.lower(), f"📋 {category.capitalize()}")
+    schedule_text = time_schedule if time_schedule else "Ahora"
+    notes_text = notes if notes else "Sin instrucciones adicionales"
+    greeting_name = owner_name.strip() if owner_name and owner_name.strip() else "Amigo de PetConnect"
+
+    subject = f"🔔 ¡Es hora de: {title} para {pet_name}!"
+
+    text_content = f"""¡Hola {greeting_name}!
+
+Es hora de la actividad programada para {pet_name}:
+
+• Actividad: {title}
+• Categoría: {category_label}
+• Horario: {schedule_text}
+• Instrucciones/Dosis: {notes_text}
+
+Entra a PetConnect para registrar el cumplimiento de esta actividad:
+https://pet-connect-flame.vercel.app/dashboard/recordatorios
+
+PetConnect 🐾
+"""
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>{subject}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #fef2f2; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1f2937;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding: 30px 15px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 580px; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 6px 22px rgba(225,29,72,0.12); border: 2px solid #fecdd3;">
+          <tr>
+            <td style="background: linear-gradient(135deg, #e11d48 0%, #be123c 100%); padding: 32px 30px; text-align: center;">
+              <span style="font-size: 38px;">🔔</span>
+              <h1 style="margin: 8px 0 0 0; color: #ffffff; font-size: 24px; font-weight: 800;">¡Es hora de la actividad de {pet_name}!</h1>
+              <p style="margin: 6px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">Alerta programada a las {schedule_text}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 32px 30px 24px 30px;">
+              <p style="margin: 0 0 16px 0; font-size: 16px; color: #111827;">
+                Hola <strong>{greeting_name}</strong>, te recordamos que tienes una actividad pendiente para <strong style="color: #e11d48;">{pet_name}</strong>:
+              </p>
+              <table role="presentation" width="100%" style="background-color: #fff1f2; border: 1.5px solid #fda4af; border-radius: 14px; padding: 18px; margin-bottom: 24px;">
+                <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280; width: 35%;"><strong>Actividad:</strong></td><td style="padding: 6px 0; font-size: 16px; color: #9f1239; font-weight: 800;">{title}</td></tr>
+                <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Categoría:</strong></td><td style="padding: 6px 0; font-size: 14px; color: #be123c; font-weight: 600;">{category_label}</td></tr>
+                <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Mascota:</strong></td><td style="padding: 6px 0; font-size: 14px; color: #111827; font-weight: 700;">{pet_name}</td></tr>
+                <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Horario:</strong></td><td style="padding: 6px 0; font-size: 14px; color: #111827;">{schedule_text}</td></tr>
+                <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280; vertical-align: top;"><strong>Dosis / Notas:</strong></td><td style="padding: 6px 0; font-size: 14px; color: #374151;">{notes_text}</td></tr>
+              </table>
+              <div style="text-align: center; margin: 26px 0 10px 0;">
+                <a href="https://pet-connect-flame.vercel.app/dashboard/recordatorios" target="_blank" style="display: inline-block; background-color: #e11d48; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 30px; border-radius: 12px; box-shadow: 0 4px 14px rgba(225,29,72,0.35);">
+                  Abrir PetConnect y Completar ✓
+                </a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #f9fafb; padding: 18px 30px; text-align: center; border-top: 1px solid #f3f4f6;">
+              <p style="margin: 0; font-size: 12px; color: #9ca3af;">PetConnect © 2026 · Notificación automática programada</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+    return _send_smtp_message(recipient_email, subject, text_content, html_content)

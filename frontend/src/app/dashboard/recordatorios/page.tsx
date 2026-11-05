@@ -152,8 +152,8 @@ export default function RecordatoriosPage() {
       pet_id: '',
       category: 'medicamento' as 'medicamento' | 'vacuna_desparasitacion' | 'bano_paseo',
       title: '',
-      frequency: '',
-      time_schedule: '',
+      frequency: 'Diariamente',
+      time_schedule: '08:00',
       notes: '',
    });
    const [submitting, setSubmitting] = useState(false);
@@ -267,8 +267,8 @@ export default function RecordatoriosPage() {
                pet_id: userPets && userPets[0] ? userPets[0].id : '',
                category: 'medicamento',
                title: '',
-               frequency: '',
-               time_schedule: '',
+               frequency: 'Diariamente',
+               time_schedule: '08:00',
                notes: '',
             });
 
@@ -679,43 +679,34 @@ export default function RecordatoriosPage() {
                         />
                      </div>
 
-                     {/* Frecuencia y Horario */}
+                     {/* Frecuencia y Horario Estándar */}
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                            <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
                               Frecuencia
                            </label>
-                           <input
-                              type="text"
+                           <select
                               value={formData.frequency}
                               onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
-                              placeholder={
-                                 formData.category === 'medicamento'
-                                    ? 'Ej: Cada 8 horas, 1 vez al día'
-                                    : formData.category === 'vacuna_desparasitacion'
-                                    ? 'Ej: Cada 3 meses, Anual'
-                                    : 'Ej: Diario, Cada 15 días'
-                              }
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-pink-500"
-                           />
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                           >
+                              <option value="Diariamente">Diariamente</option>
+                              <option value="Semanal">Semanal</option>
+                              <option value="Mensual">Mensual</option>
+                              <option value="Anual">Anual</option>
+                           </select>
                         </div>
 
                         <div>
                            <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
-                              Horario / Fecha
+                              Hora de la Alerta
                            </label>
                            <input
-                              type="text"
+                              type="time"
+                              required
                               value={formData.time_schedule}
                               onChange={(e) => setFormData({ ...formData, time_schedule: e.target.value })}
-                              placeholder={
-                                 formData.category === 'medicamento'
-                                    ? 'Ej: 08:00 AM, 04:00 PM'
-                                    : formData.category === 'vacuna_desparasitacion'
-                                    ? 'Ej: 15 de Noviembre 2026'
-                                    : 'Ej: 07:00 AM y 06:30 PM'
-                              }
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
                            />
                         </div>
                      </div>
@@ -742,7 +733,7 @@ export default function RecordatoriosPage() {
 
                      <div className="flex items-center gap-2 p-2.5 bg-pink-50 border border-pink-100 rounded-xl text-xs text-pink-700">
                         <Bell className="w-4 h-4 text-pink-600 shrink-0" />
-                        <span>Se enviará automáticamente una confirmación y notificación a tu correo Gmail registrado.</span>
+                        <span>Recibirás un correo al programar la alerta y otro en el momento exacto de la hora configurada.</span>
                      </div>
 
                      <div className="flex items-center justify-end gap-3 pt-3 border-t">
