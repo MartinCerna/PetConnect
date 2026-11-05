@@ -1,12 +1,13 @@
 import uuid
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.db.models import User, Pet, Reminder
 from app.schemas.reminder import ReminderCreate, ReminderUpdate, ReminderResponse
 from app.api.deps import get_current_user
+from app.core.email import send_reminder_email
 
 router = APIRouter()
 
@@ -23,7 +24,7 @@ def list_reminders(
     Permite filtrar por categoría (medicamento, vacuna_desparasitacion, bano_paseo) o mascota.
     """
     query = db.query(Reminder).filter(Reminder.user_id == current_user.id)
-    if category:
+    if category and category.lower() != "todos":
         query = query.filter(Reminder.category == category)
     if pet_id:
         try:
@@ -33,7 +34,6 @@ def list_reminders(
             pass
 
     reminders = query.order_by(Reminder.created_at.desc()).all()
-    # Mapea pet_name si la mascota está asociada
     result = []
     for r in reminders:
         resp = ReminderResponse.from_orm(r)
@@ -46,17 +46,21 @@ def list_reminders(
 @router.post("/", response_model=ReminderResponse, status_code=status.HTTP_201_CREATED)
 def create_reminder(
     reminder_in: ReminderCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Crea un nuevo recordatorio configurable (Medicamento, Vacunas/Desparasitaciones, Baños y Paseos).
+    Crea un nuevo recordatorio configurable (Medicamento, Vacunas/Desparasitaciones, Baños y Paseos)
+    y envía una notificación por correo al dueño de la mascota.
     """
+    pet_name = "Tu mascota"
     # Si se asocia a una mascota, verificar que pertenezca al usuario
     if reminder_in.pet_id:
         pet = db.query(Pet).filter(Pet.id == reminder_in.pet_id, Pet.user_id == current_user.id).first()
         if not pet:
             raise HTTPException(status_code=404, detail="La mascota especificada no pertenece a tu cuenta.")
+        pet_name = pet.name
 
     reminder = Reminder(
         user_id=current_user.id,
@@ -76,6 +80,22 @@ def create_reminder(
     resp = ReminderResponse.from_orm(reminder)
     if reminder.pet:
         resp.pet_name = reminder.pet.name
+        pet_name = reminder.pet.name
+
+    # Enviar notificación por correo electrónico en segundo plano
+    if current_user.email:
+        background_tasks.add_task(
+            send_reminder_email,
+            recipient_email=current_user.email,
+            owner_name=current_user.full_name or "Dueño",
+            pet_name=pet_name,
+            title=reminder.title,
+            category=reminder.category,
+            frequency=reminder.frequency,
+            time_schedule=reminder.time_schedule,
+            notes=reminder.notes,
+        )
+
     return resp
 
 
@@ -135,4 +155,3 @@ def delete_reminder(
     db.delete(reminder)
     db.commit()
     return None
-

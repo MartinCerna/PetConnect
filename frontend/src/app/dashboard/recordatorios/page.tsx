@@ -740,6 +740,11 @@ export default function RecordatoriosPage() {
                         />
                      </div>
 
+                     <div className="flex items-center gap-2 p-2.5 bg-pink-50 border border-pink-100 rounded-xl text-xs text-pink-700">
+                        <Bell className="w-4 h-4 text-pink-600 shrink-0" />
+                        <span>Se enviará automáticamente una confirmación y notificación a tu correo Gmail registrado.</span>
+                     </div>
+
                      <div className="flex items-center justify-end gap-3 pt-3 border-t">
                         <button
                            type="button"
