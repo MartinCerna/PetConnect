@@ -99,6 +99,43 @@ def create_reminder(
     return resp
 
 
+@router.post("/{reminder_id}/test-alert")
+def trigger_test_alert(
+    reminder_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Dispara manualmente el envío inmediato de la alerta por correo electrónico
+    para probar la entrega y el formato de notificación.
+    """
+    reminder = db.query(Reminder).filter(Reminder.id == reminder_id, Reminder.user_id == current_user.id).first()
+    if not reminder:
+        raise HTTPException(status_code=404, detail="Recordatorio no encontrado.")
+
+    pet_name = reminder.pet.name if reminder.pet else "Tu mascota"
+    from app.core.email import send_reminder_due_alert_email
+
+    enviado = send_reminder_due_alert_email(
+        recipient_email=current_user.email,
+        owner_name=current_user.full_name or "Dueño",
+        pet_name=pet_name,
+        title=reminder.title,
+        category=reminder.category,
+        frequency=reminder.frequency,
+        time_schedule=reminder.time_schedule,
+        notes=reminder.notes,
+    )
+
+    return {
+        "status": "ok",
+        "email_sent": enviado,
+        "recipient": current_user.email,
+        "reminder_title": reminder.title,
+    }
+
+
+
 @router.put("/{reminder_id}", response_model=ReminderResponse)
 def update_reminder(
     reminder_id: uuid.UUID,

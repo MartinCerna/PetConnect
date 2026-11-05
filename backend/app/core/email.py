@@ -1,5 +1,6 @@
 import os
 import smtplib
+import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Optional
@@ -8,7 +9,10 @@ SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "PetConnect Notificaciones")
+SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "PetConnect")
+
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
 
 CATEGORY_NAMES = {
     "medicamento": "💊 Medicamento",
@@ -18,15 +22,79 @@ CATEGORY_NAMES = {
 }
 
 
-def _send_smtp_message(recipient_email: str, subject: str, text_content: str, html_content: str) -> bool:
-    """Función base para despachar correos por SMTP TLS o SSL."""
+def _send_email_message(recipient_email: str, subject: str, text_content: str, html_content: str) -> bool:
+    """
+    Despacha correos mediante:
+    1. Resend HTTP API (Puerto 443 HTTPS - Garantizado en Render)
+    2. Brevo HTTP API (Puerto 443 HTTPS - Garantizado en Render)
+    3. SMTP directo (Puerto 587 o 465)
+    """
+    resend_key = os.getenv("RESEND_API_KEY", RESEND_API_KEY).strip()
+    brevo_key = os.getenv("BREVO_API_KEY", BREVO_API_KEY).strip()
+
+    # 1. Envío vía Resend HTTP API (HTTPS 443)
+    if resend_key:
+        try:
+            sender = os.getenv("EMAILS_FROM", f"{SMTP_FROM_NAME} <onboarding@resend.dev>")
+            res = requests.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {resend_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "from": sender,
+                    "to": [recipient_email],
+                    "subject": subject,
+                    "html": html_content,
+                    "text": text_content,
+                },
+                timeout=8,
+            )
+            if res.status_code in [200, 201]:
+                print(f"[Email Resend] ✅ Correo entregado exitosamente a {recipient_email}: '{subject}'.", flush=True)
+                return True
+            else:
+                print(f"[Email Resend] ⚠️ Error ({res.status_code}): {res.text}", flush=True)
+        except Exception as e:
+            print(f"[Email Resend] ⚠️ Excepción enviando vía Resend: {e}", flush=True)
+
+    # 2. Envío vía Brevo HTTP API (HTTPS 443)
+    if brevo_key:
+        try:
+            sender_email = os.getenv("SMTP_USER", "petconnect969@gmail.com").strip()
+            res = requests.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={
+                    "api-key": brevo_key,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                json={
+                    "sender": {"name": SMTP_FROM_NAME, "email": sender_email},
+                    "to": [{"email": recipient_email}],
+                    "subject": subject,
+                    "htmlContent": html_content,
+                    "textContent": text_content,
+                },
+                timeout=8,
+            )
+            if res.status_code in [200, 201]:
+                print(f"[Email Brevo] ✅ Correo entregado exitosamente a {recipient_email}: '{subject}'.", flush=True)
+                return True
+            else:
+                print(f"[Email Brevo] ⚠️ Error ({res.status_code}): {res.text}", flush=True)
+        except Exception as e:
+            print(f"[Email Brevo] ⚠️ Excepción enviando vía Brevo: {e}", flush=True)
+
+    # 3. Envío vía SMTP tradicional
     smtp_user = os.getenv("SMTP_USER", SMTP_USER).strip()
-    smtp_pass = os.getenv("SMTP_PASSWORD", SMTP_PASSWORD).strip()
+    smtp_pass = os.getenv("SMTP_PASSWORD", SMTP_PASSWORD).strip().replace(" ", "")
     smtp_host = os.getenv("SMTP_HOST", SMTP_HOST).strip()
     smtp_port = int(os.getenv("SMTP_PORT", str(SMTP_PORT)))
 
     if not smtp_user or not smtp_pass:
-        print(f"[Email Simulado] No se configuró SMTP_USER/SMTP_PASSWORD. "
+        print(f"[Email Simulado] No se configuró credencial de correo (SMTP o RESEND_API_KEY/BREVO_API_KEY). "
               f"Para: {recipient_email} | Asunto: '{subject}' registrado en logs.", flush=True)
         return True
 
@@ -40,19 +108,24 @@ def _send_smtp_message(recipient_email: str, subject: str, text_content: str, ht
         msg.attach(MIMEText(html_content, "html", "utf-8"))
 
         if smtp_port == 465:
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=12) as server:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=6) as server:
                 server.login(smtp_user, smtp_pass)
                 server.sendmail(smtp_user, [recipient_email], msg.as_string())
         else:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=12) as server:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=6) as server:
                 server.starttls()
                 server.login(smtp_user, smtp_pass)
                 server.sendmail(smtp_user, [recipient_email], msg.as_string())
 
-        print(f"[Email] ✅ Correo enviado exitosamente a {recipient_email}: '{subject}'.", flush=True)
+        print(f"[Email SMTP] ✅ Correo enviado exitosamente a {recipient_email}: '{subject}'.", flush=True)
         return True
+    except TimeoutError:
+        print(f"[Email SMTP] ⚠️ Tiempo de espera agotado al conectar a {smtp_host}:{smtp_port}. "
+              f"Nota: Render bloquea los puertos SMTP salientes (25, 465, 587). "
+              f"Se recomienda configurar RESEND_API_KEY o BREVO_API_KEY para despachar vía HTTPS puerto 443.", flush=True)
+        return False
     except Exception as e:
-        print(f"[Email] ⚠️ Error enviando correo a {recipient_email}: {e}", flush=True)
+        print(f"[Email SMTP] ⚠️ Error enviando correo a {recipient_email}: {e}", flush=True)
         return False
 
 
@@ -147,7 +220,7 @@ PetConnect 🐾
 </body>
 </html>
 """
-    return _send_smtp_message(recipient_email, subject, text_content, html_content)
+    return _send_email_message(recipient_email, subject, text_content, html_content)
 
 
 def send_reminder_due_alert_email(
@@ -234,4 +307,4 @@ PetConnect 🐾
 </body>
 </html>
 """
-    return _send_smtp_message(recipient_email, subject, text_content, html_content)
+    return _send_email_message(recipient_email, subject, text_content, html_content)

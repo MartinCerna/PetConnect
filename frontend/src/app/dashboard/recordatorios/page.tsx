@@ -290,19 +290,32 @@ export default function RecordatoriosPage() {
       }
    };
 
-   // Probar notificación
-   const handleTestNotification = (item: ReminderItem) => {
+   // Probar notificacion y despacho de correo de prueba
+   const handleTestNotification = async (item: ReminderItem) => {
       playNotificationSound();
       if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-         new Notification(`🔔 Hora de recordatorio: ${item.title}`, {
-            body: `Mascota: ${item.pet_name || 'Tu compañero'} | Horario: ${item.time_schedule || 'Ahora'}`,
-            icon: '/favicon.ico',
+         new Notification("Hora de recordatorio: " + item.title, {
+            body: "Mascota: " + (item.pet_name || "Tu companero") + " - Horario: " + (item.time_schedule || "Ahora"),
+            icon: "/favicon.ico",
          });
-      } else {
-         alert(`🔔 [Recordatorio Sonoro Activo]\n¡Es hora de: ${item.title}!\nHorario: ${item.time_schedule || 'Ahora'}`);
+      }
+
+      try {
+         const res = await apiFetch("/reminders/" + item.id + "/test-alert", {
+            method: "POST",
+         });
+         if (res.ok) {
+            const data = await res.json();
+            if (data.email_sent) {
+               alert("Alerta disparada.\nSe ha enviado el correo de notificacion a " + data.recipient + ".\nRevisa tu bandeja de entrada o spam.");
+            } else {
+               alert("Alerta local ejecutada.\nEl servidor intento enviar el correo a " + data.recipient + ", pero el servicio de correo aun no esta listo o las credenciales no fueron aceptadas.");
+            }
+         }
+      } catch (err) {
+         console.error("Error probando alerta:", err);
       }
    };
-
    // Filtro de recordatorios
    const filteredReminders = reminders.filter((r) => {
       if (activeTab !== 'todos' && r.category !== activeTab) return false;
