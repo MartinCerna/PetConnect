@@ -76,6 +76,14 @@ class Pet(Base):
     birth_date = Column(Date, nullable=True)
     photo_url = Column(String, nullable=True)
 
+    # Zona Segura ("Casa" + radio configurable en metros)
+    home_latitude = Column(Float, nullable=True)
+    home_longitude = Column(Float, nullable=True)
+    safe_radius_meters = Column(Integer, nullable=True, default=150)
+    safe_zone_enabled = Column(Boolean, default=False)
+    is_outside_safe_zone = Column(Boolean, default=False)
+    last_geofence_alert_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relaciones

@@ -44,6 +44,13 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
                 print(f" => Coordenada ya registrada en BD para {dev_mac} ({dt}).")
                 return
 
+            prev_latest = (
+                db.query(LocationLog)
+                .filter(LocationLog.device_id == dev_id)
+                .order_by(LocationLog.recorded_at.desc())
+                .first()
+            )
+
             log = LocationLog(
                 device_id=dev_id,
                 latitude=float(latitude),
@@ -54,6 +61,24 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
             )
             db.add(log)
             db.commit()
+
+            try:
+                from app.core.geofence import evaluate_pet_geofence
+                is_newest = True
+                if prev_latest and prev_latest.recorded_at:
+                    dt_cmp = dt if dt.tzinfo else dt.replace(tzinfo=prev_latest.recorded_at.tzinfo)
+                    is_newest = dt_cmp >= prev_latest.recorded_at
+                if is_newest:
+                    evaluate_pet_geofence(
+                        db=db,
+                        device_id=dev_id,
+                        latitude=float(latitude),
+                        longitude=float(longitude),
+                        recorded_at=dt,
+                    )
+            except Exception as geo_err:
+                print(f" => Advertencia evaluando Zona Segura: {geo_err}")
+
             db.close()
             print(f" => Coordenada guardada en BD Supabase para {dev_mac} ({dev_id}).")
             return
@@ -207,6 +232,9 @@ def decrypt_location_response_locations(device_update_protobuf):
     if not location_time_array:
         print("No locations found.")
         return
+
+    # Procesar cronológicamente de más antigua a más reciente
+    location_time_array.sort(key=lambda item: item.time)
 
     for loc in location_time_array:
 

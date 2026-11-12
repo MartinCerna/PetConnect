@@ -116,6 +116,13 @@ def record_location(
     if existing:
         return existing
 
+    prev_latest = (
+        db.query(LocationLog)
+        .filter(LocationLog.device_id == device.id)
+        .order_by(LocationLog.recorded_at.desc())
+        .first()
+    )
+
     new_location = LocationLog(
         device_id=device.id,
         latitude=location_in.latitude,
@@ -127,6 +134,25 @@ def record_location(
     db.add(new_location)
     db.commit()
     db.refresh(new_location)
+
+    # Evalúa Zona Segura si esta coordenada es la más reciente del dispositivo
+    try:
+        from app.core.geofence import evaluate_pet_geofence
+        is_newest = True
+        if prev_latest and prev_latest.recorded_at and recorded_dt:
+            r_dt = recorded_dt if recorded_dt.tzinfo else recorded_dt.replace(tzinfo=prev_latest.recorded_at.tzinfo)
+            is_newest = r_dt >= prev_latest.recorded_at
+        if is_newest:
+            evaluate_pet_geofence(
+                db=db,
+                device_id=device.id,
+                latitude=new_location.latitude,
+                longitude=new_location.longitude,
+                recorded_at=new_location.recorded_at,
+            )
+    except Exception as exc:
+        print(f"[Geofence] Error evaluando geocerca en ingest: {exc}", flush=True)
+
     return new_location
 
 

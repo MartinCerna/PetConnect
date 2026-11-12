@@ -109,6 +109,12 @@ async def lifespan(app: FastAPI):
         Reminder.__table__.create(bind=engine, checkfirst=True)
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS address VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS home_latitude DOUBLE PRECISION;"))
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS home_longitude DOUBLE PRECISION;"))
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS safe_radius_meters INTEGER DEFAULT 150;"))
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS safe_zone_enabled BOOLEAN DEFAULT FALSE;"))
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS is_outside_safe_zone BOOLEAN DEFAULT FALSE;"))
+            conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS last_geofence_alert_at TIMESTAMPTZ;"))
             conn.commit()
     except Exception as e:
         print(f"[DB] No se pudieron verificar tablas o columnas: {e}")

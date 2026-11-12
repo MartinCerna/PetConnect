@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.db.models import User, Pet, Device
-from app.schemas.pet import PetCreate, PetResponse
+from app.db.models import User, Pet, Device, LocationLog
+from app.schemas.pet import PetCreate, PetResponse, PetSafeZoneUpdate
 from app.api.deps import get_current_user
+from app.core.geofence import calculate_distance_meters
 
 router = APIRouter()
 
@@ -71,6 +72,58 @@ def list_my_pets(
     Lista las mascotas registradas por el usuario actualmente autenticado.
     """
     return db.query(Pet).filter(Pet.user_id == current_user.id).all()
+
+
+@router.put("/{pet_id}/safe-zone", response_model=PetResponse)
+def update_pet_safe_zone(
+    pet_id: uuid.UUID,
+    zone_in: PetSafeZoneUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Configura la ubicación "Casa" y el radio seguro (en metros) para la mascota.
+    """
+    pet = db.query(Pet).filter(Pet.id == pet_id, Pet.user_id == current_user.id).first()
+    if not pet:
+        raise HTTPException(status_code=404, detail="Mascota no encontrada o no autorizada.")
+
+    if zone_in.home_latitude is not None:
+        pet.home_latitude = zone_in.home_latitude
+    if zone_in.home_longitude is not None:
+        pet.home_longitude = zone_in.home_longitude
+    if zone_in.safe_radius_meters is not None:
+        pet.safe_radius_meters = zone_in.safe_radius_meters
+
+    if zone_in.safe_zone_enabled and (pet.home_latitude is None or pet.home_longitude is None):
+        raise HTTPException(
+            status_code=400,
+            detail="Debes seleccionar una ubicación para Casa antes de activar la Zona Segura.",
+        )
+
+    pet.safe_zone_enabled = zone_in.safe_zone_enabled
+
+    # Recalcula si la última coordenada conocida ya está fuera del rango configurado
+    if pet.safe_zone_enabled and pet.device_id and pet.home_latitude is not None and pet.home_longitude is not None:
+        latest = (
+            db.query(LocationLog)
+            .filter(LocationLog.device_id == pet.device_id)
+            .order_by(LocationLog.recorded_at.desc())
+            .first()
+        )
+        if latest:
+            dist = calculate_distance_meters(
+                pet.home_latitude, pet.home_longitude, latest.latitude, latest.longitude
+            )
+            pet.is_outside_safe_zone = dist > (pet.safe_radius_meters or 150)
+        else:
+            pet.is_outside_safe_zone = False
+    else:
+        pet.is_outside_safe_zone = False
+
+    db.commit()
+    db.refresh(pet)
+    return pet
 
 
 @router.get("/{pet_id}/contact")

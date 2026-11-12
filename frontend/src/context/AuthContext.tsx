@@ -13,6 +13,11 @@ export interface Pet {
    breed?: string;
    birth_date?: string | null;
    photo_url?: string;
+   home_latitude?: number | null;
+   home_longitude?: number | null;
+   safe_radius_meters?: number | null;
+   safe_zone_enabled?: boolean;
+   is_outside_safe_zone?: boolean;
    created_at?: string;
 }
 
@@ -51,6 +56,15 @@ interface AuthContextType {
    logout: () => void;
    updateProfile: (data: { full_name?: string; phone?: string; address?: string }) => Promise<boolean>;
    registerPet: (petData: any) => Promise<boolean>;
+   updatePetSafeZone: (
+      petId: string,
+      data: {
+         home_latitude?: number | null;
+         home_longitude?: number | null;
+         safe_radius_meters?: number;
+         safe_zone_enabled: boolean;
+      }
+   ) => Promise<Pet | null>;
    loadUserData: (authToken: string) => Promise<void>;
 }
 
@@ -230,6 +244,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
    };
 
+   const updatePetSafeZone = async (
+      petId: string,
+      data: {
+         home_latitude?: number | null;
+         home_longitude?: number | null;
+         safe_radius_meters?: number;
+         safe_zone_enabled: boolean;
+      }
+   ): Promise<Pet | null> => {
+      if (!token) return null;
+      try {
+         const res = await fetch(`${API_BASE}/pets/${petId}/safe-zone`, {
+            method: 'PUT',
+            headers: {
+               'Content-Type': 'application/json',
+               Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(data),
+         });
+
+         if (res.ok) {
+            const updatedPet: Pet = await res.json();
+            setPets((prev) => prev.map((p) => (p.id === updatedPet.id ? updatedPet : p)));
+            setSelectedPet((prev) => (prev && prev.id === updatedPet.id ? updatedPet : prev));
+            return updatedPet;
+         }
+         return null;
+      } catch (error) {
+         console.error('Error actualizando zona segura:', error);
+         return null;
+      }
+   };
+
    return (
       <AuthContext.Provider
          value={{
@@ -250,6 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             logout,
             updateProfile,
             registerPet,
+            updatePetSafeZone,
             loadUserData,
          }}
       >

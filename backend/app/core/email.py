@@ -308,3 +308,97 @@ PetConnect 🐾
 </html>
 """
     return _send_email_message(recipient_email, subject, text_content, html_content)
+
+
+def send_geofence_exit_alert_email(
+    recipient_email: str,
+    owner_name: str,
+    pet_name: str,
+    distance_meters: float,
+    safe_radius_meters: int,
+    latitude: float,
+    longitude: float,
+    detected_at_text: Optional[str] = None,
+) -> bool:
+    """Alerta enviada por correo cuando la mascota sale del radio seguro configurado alrededor de Casa."""
+    if not recipient_email:
+        return False
+
+    greeting_name = owner_name.strip() if owner_name and owner_name.strip() else "Amigo de PetConnect"
+    dist_int = int(round(distance_meters))
+    maps_url = f"https://www.google.com/maps/search/?api=1&query={latitude},{longitude}"
+    time_label = detected_at_text or "Hace un momento"
+
+    subject = f"🚨 Alerta de Zona Segura: {pet_name} salió del radio permitido"
+
+    text_content = f"""¡Hola {greeting_name}!
+
+⚠️ PetConnect detectó que {pet_name} se encuentra fuera de la zona segura configurada alrededor de Casa:
+
+• Mascota: {pet_name}
+• Distancia desde Casa: {dist_int} m
+• Radio seguro permitido: {safe_radius_meters} m
+• Hora del reporte: {time_label}
+• Coordenadas: {latitude:.6f}, {longitude:.6f}
+
+Ver en Google Maps:
+{maps_url}
+
+Abrir mapa en PetConnect:
+https://pet-connect-flame.vercel.app/dashboard
+
+PetConnect 🐾
+"""
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>{subject}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #fff1f2; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1f2937;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding: 30px 15px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 580px; background-color: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 6px 22px rgba(225,29,72,0.14); border: 2px solid #fecdd3;">
+          <tr>
+            <td style="background: linear-gradient(135deg, #db2777 0%, #e11d48 100%); padding: 32px 30px; text-align: center;">
+              <span style="font-size: 38px;">🚨</span>
+              <h1 style="margin: 8px 0 0 0; color: #ffffff; font-size: 23px; font-weight: 800;">{pet_name} salió de su Zona Segura</h1>
+              <p style="margin: 6px 0 0 0; color: rgba(255,255,255,0.92); font-size: 14px;">Detectado a {dist_int} m de Casa (límite: {safe_radius_meters} m)</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 30px 30px 24px 30px;">
+              <p style="margin: 0 0 16px 0; font-size: 16px; color: #111827;">
+                Hola <strong>{greeting_name}</strong>, el rastreador de <strong style="color: #db2777;">{pet_name}</strong> reportó una ubicación fuera del perímetro seguro configurado para Casa:
+              </p>
+              <table role="presentation" width="100%" style="background-color: #fff1f2; border: 1.5px solid #fda4af; border-radius: 14px; padding: 18px; margin-bottom: 24px;">
+                <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280; width: 42%;"><strong>Mascota:</strong></td><td style="padding: 6px 0; font-size: 15px; color: #9f1239; font-weight: 800;">{pet_name}</td></tr>
+                <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Distancia actual:</strong></td><td style="padding: 6px 0; font-size: 15px; color: #be123c; font-weight: 800;">{dist_int} metros desde Casa</td></tr>
+                <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Radio permitido:</strong></td><td style="padding: 6px 0; font-size: 14px; color: #111827;">{safe_radius_meters} metros</td></tr>
+                <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Hora del reporte:</strong></td><td style="padding: 6px 0; font-size: 14px; color: #111827;">{time_label}</td></tr>
+              </table>
+              <div style="text-align: center; margin: 24px 0 10px 0;">
+                <a href="https://pet-connect-flame.vercel.app/dashboard" target="_blank" style="display: inline-block; background-color: #db2777; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 700; padding: 13px 26px; border-radius: 12px; margin: 4px; box-shadow: 0 4px 14px rgba(219,39,119,0.35);">
+                  Ver en Mapa PetConnect 🐾
+                </a>
+                <a href="{maps_url}" target="_blank" style="display: inline-block; background-color: #0ea5e9; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 13px 22px; border-radius: 12px; margin: 4px;">
+                  Abrir en Google Maps 📍
+                </a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #f9fafb; padding: 18px 30px; text-align: center; border-top: 1px solid #f3f4f6;">
+              <p style="margin: 0; font-size: 12px; color: #9ca3af;">PetConnect © 2026 · Monitoreo de Zona Segura</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+    return _send_email_message(recipient_email, subject, text_content, html_content)
