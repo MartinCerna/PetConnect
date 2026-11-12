@@ -21,3 +21,6 @@ requests>=2.31.0
 gpsoauth>=1.0.2
 beautifulsoup4>=4.12.0
 pytz>=2024.1
+pyscrypt>=1.6.2
+httpx[http2]>=0.27.0
+h2>=4.1.0

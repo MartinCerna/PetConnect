@@ -22,11 +22,10 @@ ENABLE_GOOGLE_SYNC = os.getenv("ENABLE_GOOGLE_SYNC", "false").lower() == "true"
 
 async def tarea_sincronizacion_continua(intervalo_segundos: int = 180):
     """Bucle que solicita ubicaciones a Google cada 3 minutos en segundo plano."""
-    from google_location import ejecutar_sincronizacion_google
-
     await asyncio.sleep(5)  # Espera a que la API inicie completamente
     while True:
         try:
+            from google_location import ejecutar_sincronizacion_google
             print("\n[Auto-Sync] Consultando nuevas ubicaciones a Google Find My...", flush=True)
             await asyncio.wait_for(asyncio.to_thread(ejecutar_sincronizacion_google), timeout=60)
             print("[Auto-Sync] Ciclo de consulta completado.", flush=True)

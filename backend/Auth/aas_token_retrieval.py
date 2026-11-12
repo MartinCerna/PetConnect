@@ -5,13 +5,13 @@
 
 import gpsoauth
 
-from Auth.auth_flow import request_oauth_account_token_flow
 from Auth.fcm_receiver import FcmReceiver
 from Auth.token_cache import get_cached_value_or_set, set_cached_value
 from Auth.username_provider import get_username, username_string
 
 
 def _generate_aas_token():
+    from Auth.auth_flow import request_oauth_account_token_flow
     username = get_username()
     android_id = FcmReceiver().get_android_id()
     token = request_oauth_account_token_flow()
