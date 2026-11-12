@@ -18,6 +18,8 @@ export interface HomeCoordinates {
 
 interface PetMapProps {
    locations: Location[];
+   trailLocations?: Location[];
+   showTrail?: boolean;
    petName?: string;
    homeLocation?: HomeCoordinates | null;
    safeRadiusMeters?: number;
@@ -29,8 +31,53 @@ interface PetMapProps {
 
 const DEFAULT_CENTER: [number, number] = [-8.0957, -79.0496];
 
+const calculateBearingDeg = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+   if (Math.abs(lat2 - lat1) < 1e-6 && Math.abs(lon2 - lon1) < 1e-6) {
+      return 0;
+   }
+   const toRad = (deg: number) => (deg * Math.PI) / 180;
+   const dLon = toRad(lon2 - lon1);
+   const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+   const x =
+      Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+      Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+   const brng = (Math.atan2(y, x) * 180) / Math.PI;
+   return (brng + 360) % 360;
+};
+
+const buildPawIcon = (opacity: number, size: number, rotationDeg: number, color: string) =>
+   L.divIcon({
+      className: 'petconnect-paw-marker',
+      html: `
+         <div style="
+            width: ${size}px;
+            height: ${size}px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: ${opacity};
+            transform: rotate(${rotationDeg}deg);
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.22));
+            transition: transform 0.2s ease, opacity 0.2s ease;
+         ">
+            <svg viewBox="0 0 64 64" width="${size}" height="${size}" fill="${color}" xmlns="http://www.w3.org/2000/svg">
+               <ellipse cx="14" cy="24" rx="6.2" ry="8.4" transform="rotate(-18 14 24)" stroke="#ffffff" stroke-width="2"/>
+               <ellipse cx="26" cy="14" rx="6.2" ry="8.6" transform="rotate(-6 26 14)" stroke="#ffffff" stroke-width="2"/>
+               <ellipse cx="38" cy="14" rx="6.2" ry="8.6" transform="rotate(6 38 14)" stroke="#ffffff" stroke-width="2"/>
+               <ellipse cx="50" cy="24" rx="6.2" ry="8.4" transform="rotate(18 50 24)" stroke="#ffffff" stroke-width="2"/>
+               <path d="M32 25c-9.5 0-16.5 7.2-16.5 15.2 0 5.6 4.2 9.8 9.6 9.8 2.6 0 4.6-.9 6.9-.9s4.3.9 6.9.9c5.4 0 9.6-4.2 9.6-9.8C48.5 32.2 41.5 25 32 25z" stroke="#ffffff" stroke-width="2.2"/>
+            </svg>
+         </div>
+      `,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+      popupAnchor: [0, -size / 2],
+   });
+
 export default function PetMap({
    locations,
+   trailLocations = [],
+   showTrail = true,
    petName,
    homeLocation,
    safeRadiusMeters = 150,
@@ -43,6 +90,7 @@ export default function PetMap({
    const mapInstanceRef = useRef<L.Map | null>(null);
    const markersLayerRef = useRef<L.LayerGroup | null>(null);
    const safeZoneLayerRef = useRef<L.LayerGroup | null>(null);
+   const trailLayerRef = useRef<L.LayerGroup | null>(null);
    const lastCenteredKeyRef = useRef<string>('');
    const onPickRef = useRef(onPickHomeLocation);
 
@@ -68,8 +116,10 @@ export default function PetMap({
       }).addTo(map);
 
       const safeZoneGroup = L.layerGroup().addTo(map);
+      const trailGroup = L.layerGroup().addTo(map);
       const markersGroup = L.layerGroup().addTo(map);
       safeZoneLayerRef.current = safeZoneGroup;
+      trailLayerRef.current = trailGroup;
       markersLayerRef.current = markersGroup;
       mapInstanceRef.current = map;
 
@@ -77,6 +127,7 @@ export default function PetMap({
          map.remove();
          mapInstanceRef.current = null;
          markersLayerRef.current = null;
+         trailLayerRef.current = null;
          safeZoneLayerRef.current = null;
       };
    }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -125,7 +176,76 @@ export default function PetMap({
       }
    }, [locations, petName, isOutsideSafeZone, isEditingSafeZone]);
 
-   // 3. Dibujar círculo de Zona Segura y marcador de Casa en capa independiente
+   // 3. Dibujar rastro de huellitas (últimas 10 ubicaciones) y línea direccional
+   useEffect(() => {
+      const trailLayer = trailLayerRef.current;
+      if (!trailLayer) return;
+
+      trailLayer.clearLayers();
+
+      if (!showTrail || trailLocations.length === 0) return;
+
+      // Orden cronológico: más antigua [0] -> más reciente [length - 1]
+      const chronological = [...trailLocations]
+         .slice(0, 10)
+         .sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
+
+      if (chronological.length > 1) {
+         const pathCoords: [number, number][] = chronological.map((loc) => [loc.latitude, loc.longitude]);
+         const polyline = L.polyline(pathCoords, {
+            color: isOutsideSafeZone ? '#e11d48' : '#ec4899',
+            weight: 3,
+            opacity: 0.6,
+            dashArray: '6, 8',
+            lineJoin: 'round',
+         });
+         trailLayer.addLayer(polyline);
+      }
+
+      const total = chronological.length;
+      let lastBearing = 0;
+
+      // Marcamos con huellita cada paso del recorrido para ver de dónde viene y hacia dónde va
+      chronological.forEach((loc, idx) => {
+         const isMostRecent = idx === total - 1;
+         // Si ya hay marcador principal en el punto más reciente, omitimos duplicar encima salvo si solo hay 1 punto
+         if (isMostRecent && locations.length > 0) return;
+
+         const nextLoc = chronological[idx + 1] ?? locations[0];
+         if (nextLoc) {
+            const movedEnough =
+               Math.abs(nextLoc.latitude - loc.latitude) >= 1e-6 ||
+               Math.abs(nextLoc.longitude - loc.longitude) >= 1e-6;
+            if (movedEnough) {
+               lastBearing = calculateBearingDeg(loc.latitude, loc.longitude, nextLoc.latitude, nextLoc.longitude);
+            }
+         }
+
+         const progress = total > 1 ? idx / (total - 1) : 1;
+         const opacity = 0.42 + progress * 0.53;
+         const size = Math.round(20 + progress * 7);
+         const color = isOutsideSafeZone ? '#e11d48' : '#db2777';
+
+         const pawMarker = L.marker([loc.latitude, loc.longitude], {
+            icon: buildPawIcon(opacity, size, lastBearing, color),
+         });
+
+         const stepLabel = idx === 0 ? 'Inicio del rastro' : `Huella #${idx + 1} de ${total}`;
+         pawMarker.bindPopup(`
+            <div style="font-family: inherit; font-size: 12px; color: #171717;">
+               <strong style="color: ${color};">🐾 ${stepLabel}</strong><br/>
+               <span style="color: #525252;">${petName ?? 'Mascota'} pasó por aquí</span><br/>
+               <span style="color: #737373; font-size: 11px;">
+                  ${new Date(loc.recorded_at).toLocaleString()}
+               </span>
+            </div>
+         `);
+
+         trailLayer.addLayer(pawMarker);
+      });
+   }, [trailLocations, showTrail, locations, petName, isOutsideSafeZone]);
+
+   // 4. Dibujar círculo de Zona Segura y marcador de Casa en capa independiente
    useEffect(() => {
       const safeZoneLayer = safeZoneLayerRef.current;
       if (!safeZoneLayer) return;
@@ -195,7 +315,7 @@ export default function PetMap({
       safeZoneLayer.addLayer(homeMarker);
    }, [homeLocation, safeRadiusMeters, safeZoneEnabled, isOutsideSafeZone, isEditingSafeZone]);
 
-   // 4. Modo selección en el mapa cuando se edita Casa
+   // 5. Modo selección en el mapa cuando se edita Casa
    useEffect(() => {
       const map = mapInstanceRef.current;
       if (!map) return;

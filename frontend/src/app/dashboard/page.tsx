@@ -11,6 +11,7 @@ import {
    ChevronDown,
    ChevronUp,
    Crosshair,
+   Footprints,
    Home,
    LocateFixed,
    MapPin,
@@ -100,6 +101,8 @@ export default function DashboardPage() {
    const { userPets, selectedPet, setSelectedPet, updatePetSafeZone } = useAuth();
    const [showRegister, setShowRegister] = useState(false);
    const [locations, setLocations] = useState<Location[]>([]);
+   const [trailLocations, setTrailLocations] = useState<Location[]>([]);
+   const [showTrail, setShowTrail] = useState<boolean>(true);
    const [locationStatus, setLocationStatus] = useState('');
    const [cardCollapsedMobile, setCardCollapsedMobile] = useState(false);
 
@@ -121,6 +124,24 @@ export default function DashboardPage() {
       }
    }, [userPets, selectedPet, setSelectedPet]);
 
+   useEffect(() => {
+      if (typeof window === 'undefined') return;
+      const saved = window.localStorage.getItem('petconnect_show_trail');
+      if (saved === 'false') {
+         setShowTrail(false);
+      }
+   }, []);
+
+   const toggleTrail = useCallback(() => {
+      setShowTrail((prev) => {
+         const next = !prev;
+         if (typeof window !== 'undefined') {
+            window.localStorage.setItem('petconnect_show_trail', String(next));
+         }
+         return next;
+      });
+   }, []);
+
    // Resetear editor al cambiar de mascota
    useEffect(() => {
       setIsEditingZone(false);
@@ -135,10 +156,14 @@ export default function DashboardPage() {
    const loadLocations = useCallback(async () => {
       if (!petId) return;
       try {
-         // Consulta exclusivamente la última ubicación registrada de la mascota
-         const res = await apiFetch(`/locations/pet/${petId}/latest`);
-         if (res.ok) {
-            const data: Location | null = await res.json();
+         // Consulta la última ubicación y, si el rastro está activo, las últimas 10 ubicaciones
+         const [resLatest, resHistory] = await Promise.all([
+            apiFetch(`/locations/pet/${petId}/latest`),
+            showTrail ? apiFetch(`/locations/pet/${petId}/history?limit=10`) : Promise.resolve(null),
+         ]);
+
+         if (resLatest.ok) {
+            const data: Location | null = await resLatest.json();
             if (data && data.latitude && data.longitude) {
                setLocations([data]);
                setLocationStatus('');
@@ -146,23 +171,31 @@ export default function DashboardPage() {
                setLocations([]);
                setLocationStatus(petDeviceId ? 'Aún no hay ubicaciones registradas.' : 'Esta mascota no tiene un dispositivo vinculado.');
             }
-         } else if (res.status === 404) {
+         } else if (resLatest.status === 404) {
             setLocations([]);
             setLocationStatus('Aún no hay ubicaciones registradas.');
-         } else if (res.status === 400) {
+         } else if (resLatest.status === 400) {
             setLocations([]);
             setLocationStatus('Esta mascota no tiene un dispositivo vinculado.');
          } else {
             setLocations([]);
             setLocationStatus('No se pudo obtener la ubicación.');
          }
+
+         if (showTrail && resHistory && resHistory.ok) {
+            const histData: Location[] = await resHistory.json();
+            setTrailLocations(Array.isArray(histData) ? histData.slice(0, 10) : []);
+         } else if (!showTrail) {
+            setTrailLocations([]);
+         }
       } catch {
          setLocationStatus('No se pudo conectar con el servidor.');
       }
-   }, [petId, petDeviceId]);
+   }, [petId, petDeviceId, showTrail]);
 
    useEffect(() => {
       setLocations([]);
+      setTrailLocations([]);
       setLocationStatus('');
       loadLocations();
       const id = setInterval(loadLocations, REFRESH_MS);
@@ -345,6 +378,8 @@ export default function DashboardPage() {
          <div className="absolute inset-0 z-0">
             <PetMap
                locations={locations}
+               trailLocations={trailLocations}
+               showTrail={showTrail}
                petName={selectedPet?.name}
                homeLocation={activeHome}
                safeRadiusMeters={activeRadius}
@@ -669,9 +704,49 @@ export default function DashboardPage() {
                   {!cardCollapsedMobile && !isEditingZone && (
                      <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-white/60 p-4 sm:p-5">
                         <h2 className="text-base sm:text-lg font-bold text-neutral-900 mb-1 sm:mb-2">Panel de Control</h2>
-                        <p className="text-xs sm:text-sm text-neutral-500 mb-3 sm:mb-4 leading-relaxed">
+                        <p className="text-xs sm:text-sm text-neutral-500 mb-3 leading-relaxed">
                            {locationStatus || 'Mostrando la última ubicación en tiempo real.'}
                         </p>
+
+                        {/* Opción de Rastro de Huellitas (últimas 10 ubicaciones) */}
+                        <button
+                           type="button"
+                           onClick={toggleTrail}
+                           aria-pressed={showTrail}
+                           className={`w-full mb-3 px-3 py-2.5 rounded-xl border text-left transition-colors flex items-center justify-between gap-2.5 ${
+                              showTrail
+                                 ? 'bg-pink-50/90 border-pink-200 text-pink-900'
+                                 : 'bg-neutral-50 border-neutral-200 text-neutral-700 hover:bg-neutral-100'
+                           }`}
+                        >
+                           <div className="flex items-center gap-2.5 min-w-0">
+                              <div
+                                 className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                    showTrail ? 'bg-pink-600 text-white' : 'bg-neutral-200 text-neutral-500'
+                                 }`}
+                              >
+                                 <Footprints className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                 <p className="text-xs font-bold leading-tight">Rastro de huellitas</p>
+                                 <p className="text-[11px] text-neutral-500 truncate">
+                                    {showTrail
+                                       ? trailLocations.length > 1
+                                          ? `Últimas ${trailLocations.length} ubicaciones`
+                                          : 'Últimas 10 ubicaciones'
+                                       : 'Desactivado en el mapa'}
+                                 </p>
+                              </div>
+                           </div>
+                           <span
+                              className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
+                                 showTrail ? 'bg-pink-600 justify-end' : 'bg-neutral-300 justify-start'
+                              }`}
+                           >
+                              <span className="w-4 h-4 bg-white rounded-full shadow-sm" />
+                           </span>
+                        </button>
+
                         <button
                            onClick={() => setShowRegister(true)}
                            className="w-full bg-pink-600 hover:bg-pink-700 text-white font-medium py-2 sm:py-2.5 px-4 rounded-xl transition-colors shadow-md text-xs sm:text-sm flex justify-center items-center gap-2"
@@ -683,10 +758,27 @@ export default function DashboardPage() {
 
                </div>
 
-               {/* Indicador de Estado de Red */}
-               <div className="ml-auto bg-white/95 backdrop-blur-md px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl shadow-lg border border-white/60 flex items-center gap-2 pointer-events-auto">
-                  <span className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
-                  <span className="font-semibold text-neutral-800 text-xs sm:text-sm">Red PetConnect</span>
+               {/* Indicadores superiores derechos: Acceso rápido de rastro y Estado de Red */}
+               <div className="ml-auto flex items-center gap-2 pointer-events-auto">
+                  <button
+                     type="button"
+                     onClick={toggleTrail}
+                     aria-pressed={showTrail}
+                     title="Mostrar u ocultar el rastro de las últimas 10 ubicaciones"
+                     className={`px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl shadow-lg border flex items-center gap-1.5 text-xs sm:text-sm font-semibold transition-all backdrop-blur-md ${
+                        showTrail
+                           ? 'bg-pink-600/95 text-white border-pink-500 hover:bg-pink-700'
+                           : 'bg-white/95 text-neutral-600 border-white/60 hover:bg-neutral-50'
+                     }`}
+                  >
+                     <Footprints className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                     <span>Huellitas{showTrail && trailLocations.length > 0 ? ` (${trailLocations.length})` : ''}</span>
+                  </button>
+
+                  <div className="bg-white/95 backdrop-blur-md px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl shadow-lg border border-white/60 flex items-center gap-2">
+                     <span className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
+                     <span className="font-semibold text-neutral-800 text-xs sm:text-sm">Red PetConnect</span>
+                  </div>
                </div>
 
             </div>

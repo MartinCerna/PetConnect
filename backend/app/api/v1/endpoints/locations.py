@@ -203,7 +203,7 @@ def get_pet_location_history(
         raise HTTPException(status_code=404, detail="Mascota no encontrada o no autorizada.")
 
     if not pet.device_id:
-        return None
+        return []
 
     return (
         db.query(LocationLog)
