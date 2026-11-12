@@ -229,6 +229,7 @@ def send_reminder_due_alert_email(
     pet_name: str,
     title: str,
     category: str,
+    frequency: Optional[str] = None,
     time_schedule: Optional[str] = None,
     notes: Optional[str] = None,
 ) -> bool:
@@ -238,6 +239,7 @@ def send_reminder_due_alert_email(
 
     category_label = CATEGORY_NAMES.get(category.lower(), f"📋 {category.capitalize()}")
     schedule_text = time_schedule if time_schedule else "Ahora"
+    frequency_text = frequency if frequency else "Programado"
     notes_text = notes if notes else "Sin instrucciones adicionales"
     greeting_name = owner_name.strip() if owner_name and owner_name.strip() else "Amigo de PetConnect"
 
@@ -250,6 +252,7 @@ Es hora de la actividad programada para {pet_name}:
 • Actividad: {title}
 • Categoría: {category_label}
 • Horario: {schedule_text}
+• Frecuencia: {frequency_text}
 • Instrucciones/Dosis: {notes_text}
 
 Entra a PetConnect para registrar el cumplimiento de esta actividad:
@@ -286,6 +289,7 @@ PetConnect 🐾
                 <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Categoría:</strong></td><td style="padding: 6px 0; font-size: 14px; color: #be123c; font-weight: 600;">{category_label}</td></tr>
                 <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Mascota:</strong></td><td style="padding: 6px 0; font-size: 14px; color: #111827; font-weight: 700;">{pet_name}</td></tr>
                 <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Horario:</strong></td><td style="padding: 6px 0; font-size: 14px; color: #111827;">{schedule_text}</td></tr>
+                <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280;"><strong>Frecuencia:</strong></td><td style="padding: 6px 0; font-size: 14px; color: #111827;">{frequency_text}</td></tr>
                 <tr><td style="padding: 6px 0; font-size: 14px; color: #6b7280; vertical-align: top;"><strong>Dosis / Notas:</strong></td><td style="padding: 6px 0; font-size: 14px; color: #374151;">{notes_text}</td></tr>
               </table>
               <div style="text-align: center; margin: 26px 0 10px 0;">

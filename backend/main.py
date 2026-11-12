@@ -48,6 +48,7 @@ async def tarea_verificacion_alertas_recordatorios(intervalo_segundos: int = 60)
     from app.db.session import SessionLocal
     from app.db.models import Reminder
     from app.core.email import send_reminder_due_alert_email
+    from app.core.reminder_schedule import should_trigger_reminder
 
     await asyncio.sleep(10)
     print("[Alertas-Recordatorios] Tarea en segundo plano iniciada (monitoreo cada 60s).", flush=True)
@@ -70,8 +71,7 @@ async def tarea_verificacion_alertas_recordatorios(intervalo_segundos: int = 60)
                 if not r.time_schedule or not r.user or not r.user.email:
                     continue
 
-                horario = r.time_schedule.strip()
-                if horario == hora_actual or horario.startswith(hora_actual):
+                if should_trigger_reminder(r.frequency, r.time_schedule, now_local, r.created_at):
                     clave_alerta = (str(r.id), fecha_hoy, hora_actual)
                     if clave_alerta not in HISTORIAL_ALERTAS_DISPARADAS:
                         HISTORIAL_ALERTAS_DISPARADAS.add(clave_alerta)
@@ -89,7 +89,8 @@ async def tarea_verificacion_alertas_recordatorios(intervalo_segundos: int = 60)
                             pet_name=pet_name,
                             title=r.title,
                             category=r.category,
-                            time_schedule=r.time_schedule,
+                            frequency=r.frequency,
+                            time_schedule=hora_actual,
                             notes=r.notes,
                         )
 

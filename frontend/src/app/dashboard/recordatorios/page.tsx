@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import {
@@ -14,12 +14,12 @@ import {
    Trash2,
    Clock,
    Calendar,
-   Filter,
    Volume2,
-   AlertCircle,
    X,
    Check,
    Lightbulb,
+   Pencil,
+   Repeat,
 } from 'lucide-react';
 
 export interface ReminderItem {
@@ -35,6 +35,20 @@ export interface ReminderItem {
    is_active: boolean;
    created_at: string;
 }
+
+type ReminderCategory = 'medicamento' | 'vacuna_desparasitacion' | 'bano_paseo';
+type ScheduleMode = 'multi' | 'diario' | 'dias' | 'fecha';
+type DateRecurrence = 'Una sola vez' | 'Mensual' | 'Anual';
+
+const WEEKDAYS = [
+   { key: 'Lun', label: 'L' },
+   { key: 'Mar', label: 'M' },
+   { key: 'Mié', label: 'M' },
+   { key: 'Jue', label: 'J' },
+   { key: 'Vie', label: 'V' },
+   { key: 'Sáb', label: 'S' },
+   { key: 'Dom', label: 'D' },
+] as const;
 
 const PET_TIPS = [
    {
@@ -88,7 +102,7 @@ const CATEGORIES = [
       icon: Pill,
       color: 'bg-pink-500 text-white',
       badge: 'bg-pink-50 text-pink-700 border-pink-200',
-      description: 'Nombre, frecuencia y horario',
+      description: 'Dosis múltiples, cada X h u horas fijas',
    },
    {
       id: 'vacuna_desparasitacion',
@@ -96,7 +110,7 @@ const CATEGORIES = [
       icon: Syringe,
       color: 'bg-sky-500 text-white',
       badge: 'bg-sky-50 text-sky-700 border-sky-200',
-      description: 'Control preventivo de vacunas y parásitos',
+      description: 'Control preventivo por fechas o ciclos',
    },
    {
       id: 'bano_paseo',
@@ -104,7 +118,7 @@ const CATEGORIES = [
       icon: Sparkles,
       color: 'bg-emerald-500 text-white',
       badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      description: 'Higiene, paseos y bienestar diario',
+      description: 'Varios paseos al día o días concretos',
    },
    {
       id: 'tips',
@@ -116,17 +130,51 @@ const CATEGORIES = [
    },
 ];
 
+const todayIso = () => {
+   const now = new Date();
+   const yyyy = now.getFullYear();
+   const mm = String(now.getMonth() + 1).padStart(2, '0');
+   const dd = String(now.getDate()).padStart(2, '0');
+   return `${yyyy}-${mm}-${dd}`;
+};
+
+const addHoursToTime = (hhmm: string, hoursToAdd: number): string => {
+   const [hStr, mStr] = hhmm.split(':');
+   const totalMins = ((Number(hStr) || 0) * 60 + (Number(mStr) || 0) + hoursToAdd * 60) % (24 * 60);
+   const h = String(Math.floor(totalMins / 60)).padStart(2, '0');
+   const m = String(totalMins % 60).padStart(2, '0');
+   return `${h}:${m}`;
+};
+
+const buildIntervalTimes = (startTime: string, intervalHours: number): string[] => {
+   const count = Math.max(1, Math.min(8, Math.floor(24 / intervalHours)));
+   return Array.from({ length: count }, (_, idx) => addHoursToTime(startTime, idx * intervalHours));
+};
+
+const parseScheduleDisplay = (timeSchedule?: string | null) => {
+   const raw = (timeSchedule || '').trim();
+   const dateMatch = raw.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+   const times = raw.match(/\b\d{2}:\d{2}\b/g) || [];
+   return {
+      date: dateMatch ? dateMatch[1] : null,
+      times,
+      fallback: dateMatch || times.length > 0 ? null : raw,
+   };
+};
+
 // Genera un sonido suave de notificación usando Web Audio API
 const playNotificationSound = () => {
    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioCtx =
+         window.AudioContext ||
+         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
       gain.gain.setValueAtTime(0.2, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
       osc.connect(gain);
@@ -139,23 +187,27 @@ const playNotificationSound = () => {
 };
 
 export default function RecordatoriosPage() {
-   const { userPets, selectedPet, setSelectedPet } = useAuth();
+   const { userPets, selectedPet } = useAuth();
 
    const [reminders, setReminders] = useState<ReminderItem[]>([]);
    const [loading, setLoading] = useState(true);
    const [activeTab, setActiveTab] = useState<string>('todos');
    const [showModal, setShowModal] = useState(false);
+   const [editingId, setEditingId] = useState<string | null>(null);
    const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
 
-   // Estado del formulario
-   const [formData, setFormData] = useState({
-      pet_id: '',
-      category: 'medicamento' as 'medicamento' | 'vacuna_desparasitacion' | 'bano_paseo',
-      title: '',
-      frequency: 'Diariamente',
-      time_schedule: '08:00',
-      notes: '',
-   });
+   // Estado del formulario rediseñado
+   const [petId, setPetId] = useState('');
+   const [category, setCategory] = useState<ReminderCategory>('medicamento');
+   const [title, setTitle] = useState('');
+   const [notes, setNotes] = useState('');
+
+   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>('multi');
+   const [multiLabel, setMultiLabel] = useState('Cada 8 horas');
+   const [times, setTimes] = useState<string[]>(['08:00', '16:00', '00:00']);
+   const [selectedDays, setSelectedDays] = useState<string[]>(['Lun', 'Mié', 'Vie']);
+   const [specificDate, setSpecificDate] = useState<string>(todayIso());
+   const [dateRecurrence, setDateRecurrence] = useState<DateRecurrence>('Una sola vez');
    const [submitting, setSubmitting] = useState(false);
 
    // Carga de permisos de notificación
@@ -204,12 +256,175 @@ export default function RecordatoriosPage() {
       loadReminders();
    }, [loadReminders]);
 
-   // Inicializar pet_id por defecto en el formulario
    useEffect(() => {
-      if (userPets && userPets.length > 0 && !formData.pet_id) {
-         setFormData((prev) => ({ ...prev, pet_id: selectedPet?.id || userPets[0].id }));
+      if (userPets && userPets.length > 0 && !petId) {
+         setPetId(selectedPet?.id || userPets[0].id);
       }
-   }, [userPets, selectedPet, formData.pet_id]);
+   }, [userPets, selectedPet, petId]);
+
+   // Serializa el horario según el modo elegido manteniendo compatibilidad con backend
+   const { serializedFrequency, serializedTimeSchedule } = useMemo(() => {
+      const cleanTimes = Array.from(new Set(times.map((t) => t.trim()).filter(Boolean)));
+      const effectiveTimes = cleanTimes.length > 0 ? cleanTimes : ['08:00'];
+
+      if (scheduleMode === 'multi') {
+         const freqText =
+            multiLabel && multiLabel !== 'Personalizado'
+               ? multiLabel
+               : effectiveTimes.length > 1
+                 ? `${effectiveTimes.length} veces al día`
+                 : 'Diariamente';
+         return {
+            serializedFrequency: freqText,
+            serializedTimeSchedule: effectiveTimes.join(', '),
+         };
+      }
+
+      if (scheduleMode === 'diario') {
+         return {
+            serializedFrequency: effectiveTimes.length > 1 ? `Diario (${effectiveTimes.length} veces)` : 'Diariamente',
+            serializedTimeSchedule: effectiveTimes.join(', '),
+         };
+      }
+
+      if (scheduleMode === 'dias') {
+         const daysText = selectedDays.length > 0 ? selectedDays.join(', ') : 'Lun';
+         return {
+            serializedFrequency: `Días: ${daysText}`,
+            serializedTimeSchedule: effectiveTimes.join(', '),
+         };
+      }
+
+      // Modo fecha específica / mensual / anual
+      const singleTime = effectiveTimes[0] || '08:00';
+      return {
+         serializedFrequency: `${dateRecurrence} (${specificDate})`,
+         serializedTimeSchedule: `${specificDate} · ${singleTime}`,
+      };
+   }, [scheduleMode, multiLabel, times, selectedDays, specificDate, dateRecurrence]);
+
+   const resetForm = (nextCategory: ReminderCategory = 'medicamento') => {
+      setEditingId(null);
+      setPetId(selectedPet?.id || (userPets && userPets[0]?.id) || '');
+      setCategory(nextCategory);
+      setTitle('');
+      setNotes('');
+      setSpecificDate(todayIso());
+      setDateRecurrence('Una sola vez');
+      setSelectedDays(['Lun', 'Mié', 'Vie']);
+
+      if (nextCategory === 'medicamento') {
+         setScheduleMode('multi');
+         setMultiLabel('Cada 8 horas');
+         setTimes(['08:00', '16:00', '00:00']);
+      } else if (nextCategory === 'bano_paseo') {
+         setScheduleMode('multi');
+         setMultiLabel('2 veces al día');
+         setTimes(['07:30', '18:30']);
+      } else {
+         setScheduleMode('fecha');
+         setTimes(['09:00']);
+      }
+   };
+
+   const openCreateModal = () => {
+      const defaultCat: ReminderCategory =
+         activeTab === 'medicamento' || activeTab === 'vacuna_desparasitacion' || activeTab === 'bano_paseo'
+            ? activeTab
+            : 'medicamento';
+      resetForm(defaultCat);
+      setShowModal(true);
+   };
+
+   const openEditModal = (item: ReminderItem) => {
+      setEditingId(item.id);
+      setPetId(item.pet_id || selectedPet?.id || (userPets && userPets[0]?.id) || '');
+      setCategory(item.category);
+      setTitle(item.title);
+      setNotes(item.notes || '');
+
+      const parsed = parseScheduleDisplay(item.time_schedule);
+      const parsedTimes = parsed.times.length > 0 ? parsed.times : ['08:00'];
+      const freq = (item.frequency || '').trim();
+      const freqLower = freq.toLowerCase();
+
+      setTimes(parsedTimes);
+
+      if (parsed.date || freqLower.includes('una sola vez') || freqLower.includes('mensual') || freqLower.includes('anual')) {
+         setScheduleMode('fecha');
+         setSpecificDate(parsed.date || todayIso());
+         setDateRecurrence(
+            freqLower.includes('mensual') ? 'Mensual' : freqLower.includes('anual') ? 'Anual' : 'Una sola vez'
+         );
+      } else if (freqLower.startsWith('días:') || freqLower.startsWith('dias:')) {
+         setScheduleMode('dias');
+         const found = WEEKDAYS.filter((d) => freqLower.includes(d.key.toLowerCase())).map((d) => d.key);
+         setSelectedDays(found.length > 0 ? found : ['Lun']);
+      } else if (parsedTimes.length > 1 || freqLower.includes('cada') || freqLower.includes('veces')) {
+         setScheduleMode('multi');
+         setMultiLabel(freq || `${parsedTimes.length} veces al día`);
+      } else {
+         setScheduleMode('diario');
+      }
+
+      setShowModal(true);
+   };
+
+   const handleCategorySwitchInModal = (nextCat: ReminderCategory) => {
+      setCategory(nextCat);
+      if (editingId) return;
+      if (nextCat === 'medicamento') {
+         setScheduleMode('multi');
+         setMultiLabel('Cada 8 horas');
+         setTimes(['08:00', '16:00', '00:00']);
+      } else if (nextCat === 'bano_paseo') {
+         setScheduleMode('multi');
+         setMultiLabel('2 veces al día');
+         setTimes(['07:30', '18:30']);
+      } else {
+         setScheduleMode('fecha');
+         setDateRecurrence('Una sola vez');
+         setTimes(['09:00']);
+      }
+   };
+
+   const applyIntervalPreset = (intervalHours: number, label: string) => {
+      const baseTime = times[0] || '08:00';
+      setMultiLabel(label);
+      setTimes(buildIntervalTimes(baseTime, intervalHours));
+   };
+
+   const applyWalkPreset = () => {
+      setMultiLabel('2 veces al día');
+      setTimes(['07:30', '18:30']);
+   };
+
+   const handleUpdateTimeAt = (idx: number, value: string) => {
+      setMultiLabel('Personalizado');
+      setTimes((prev) => prev.map((t, i) => (i === idx ? value : t)));
+   };
+
+   const handleAddTimeSlot = () => {
+      if (times.length >= 8) return;
+      const last = times[times.length - 1] || '08:00';
+      setMultiLabel('Personalizado');
+      setTimes((prev) => [...prev, addHoursToTime(last, 4)]);
+   };
+
+   const handleRemoveTimeSlot = (idx: number) => {
+      if (times.length <= 1) return;
+      setMultiLabel('Personalizado');
+      setTimes((prev) => prev.filter((_, i) => i !== idx));
+   };
+
+   const toggleWeekday = (dayKey: string) => {
+      setSelectedDays((prev) => {
+         if (prev.includes(dayKey)) {
+            return prev.length > 1 ? prev.filter((d) => d !== dayKey) : prev;
+         }
+         return WEEKDAYS.map((w) => w.key).filter((k) => k === dayKey || prev.includes(k));
+      });
+   };
 
    // Alternar completado
    const handleToggleCompleted = async (item: ReminderItem) => {
@@ -239,46 +454,47 @@ export default function RecordatoriosPage() {
       }
    };
 
-   // Guardar nuevo recordatorio
+   // Guardar o actualizar recordatorio
    const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!formData.title.trim()) return;
+      if (!title.trim()) return;
 
       setSubmitting(true);
+      const payload = {
+         pet_id: petId || null,
+         category,
+         title: title.trim(),
+         frequency: serializedFrequency,
+         time_schedule: serializedTimeSchedule,
+         notes: notes.trim() || null,
+      };
+
       try {
-         const res = await apiFetch('/reminders/', {
-            method: 'POST',
+         const res = await apiFetch(editingId ? `/reminders/${editingId}` : '/reminders/', {
+            method: editingId ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-               pet_id: formData.pet_id || null,
-               category: formData.category,
-               title: formData.title.trim(),
-               frequency: formData.frequency.trim() || null,
-               time_schedule: formData.time_schedule.trim() || null,
-               notes: formData.notes.trim() || null,
-            }),
+            body: JSON.stringify(payload),
          });
 
          if (res.ok) {
-            const created = await res.json();
-            setReminders((prev) => [created, ...prev]);
+            const saved: ReminderItem = await res.json();
+            if (editingId) {
+               setReminders((prev) => prev.map((r) => (r.id === saved.id ? saved : r)));
+            } else {
+               setReminders((prev) => [saved, ...prev]);
+            }
             setShowModal(false);
-            setFormData({
-               pet_id: userPets && userPets[0] ? userPets[0].id : '',
-               category: 'medicamento',
-               title: '',
-               frequency: 'Diariamente',
-               time_schedule: '08:00',
-               notes: '',
-            });
+            resetForm('medicamento');
 
-            // Dispara notificación y sonido de confirmación
             playNotificationSound();
             if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-               new Notification(`✅ Recordatorio programado: ${created.title}`, {
-                  body: `${created.frequency || 'Configurado'} · ${created.time_schedule || ''}`,
-                  icon: '/favicon.ico',
-               });
+               new Notification(
+                  `${editingId ? '✅ Recordatorio actualizado' : '✅ Recordatorio programado'}: ${saved.title}`,
+                  {
+                     body: `${saved.frequency || 'Configurado'} · ${saved.time_schedule || ''}`,
+                     icon: '/favicon.ico',
+                  }
+               );
             }
          } else {
             alert('No se pudo guardar el recordatorio.');
@@ -290,33 +506,41 @@ export default function RecordatoriosPage() {
       }
    };
 
-   // Probar notificacion y despacho de correo de prueba
+   // Probar notificación y despacho de correo de prueba
    const handleTestNotification = async (item: ReminderItem) => {
       playNotificationSound();
       if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-         new Notification("Hora de recordatorio: " + item.title, {
-            body: "Mascota: " + (item.pet_name || "Tu companero") + " - Horario: " + (item.time_schedule || "Ahora"),
-            icon: "/favicon.ico",
+         new Notification('Hora de recordatorio: ' + item.title, {
+            body: 'Mascota: ' + (item.pet_name || 'Tu compañero') + ' - Horario: ' + (item.time_schedule || 'Ahora'),
+            icon: '/favicon.ico',
          });
       }
 
       try {
-         const res = await apiFetch("/reminders/" + item.id + "/test-alert", {
-            method: "POST",
+         const res = await apiFetch('/reminders/' + item.id + '/test-alert', {
+            method: 'POST',
          });
          if (res.ok) {
             const data = await res.json();
             if (data.email_sent) {
-               alert("Alerta disparada.\nSe ha enviado el correo de notificacion a " + data.recipient + ".\nRevisa tu bandeja de entrada o spam.");
+               alert(
+                  'Alerta disparada.\nSe ha enviado el correo de notificación a ' +
+                     data.recipient +
+                     '.\nRevisa tu bandeja de entrada o spam.'
+               );
             } else {
-               alert("Alerta local ejecutada.\nEl servidor intento enviar el correo a " + data.recipient + ", pero el servicio de correo aun no esta listo o las credenciales no fueron aceptadas.");
+               alert(
+                  'Alerta local ejecutada.\nEl servidor intentó enviar el correo a ' +
+                     data.recipient +
+                     ', pero el servicio de correo aún no está listo o las credenciales no fueron aceptadas.'
+               );
             }
          }
       } catch (err) {
-         console.error("Error probando alerta:", err);
+         console.error('Error probando alerta:', err);
       }
    };
-   // Filtro de recordatorios
+
    const filteredReminders = reminders.filter((r) => {
       if (activeTab !== 'todos' && r.category !== activeTab) return false;
       return true;
@@ -337,12 +561,11 @@ export default function RecordatoriosPage() {
                      Recordatorios para tu Mascota
                   </h1>
                   <p className="text-sm text-neutral-500 mt-1">
-                     Configura alertas para medicamentos, vacunas, desparasitaciones, baños y paseos.
+                     Programa alertas con múltiples horarios al día, cada ciertas horas, días específicos o fechas exactas.
                   </p>
                </div>
 
                <div className="flex items-center gap-3">
-                  {/* Botón de Permiso de Notificaciones */}
                   {notificationPermission !== 'granted' ? (
                      <button
                         onClick={requestNotificationPermission}
@@ -359,11 +582,11 @@ export default function RecordatoriosPage() {
                   )}
 
                   <button
-                     onClick={() => setShowModal(true)}
+                     onClick={openCreateModal}
                      className="px-4 py-2.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-pink-200 flex items-center gap-1.5"
                   >
                      <Plus className="w-4 h-4" />
-                     + Nuevo Recordatorio
+                     Nuevo Recordatorio
                   </button>
                </div>
             </div>
@@ -484,10 +707,10 @@ export default function RecordatoriosPage() {
                      </div>
                      <h3 className="font-bold text-neutral-800 text-base">No hay recordatorios configurados</h3>
                      <p className="text-xs text-neutral-400 max-w-sm mx-auto">
-                        Crea alertas para no olvidar medicamentos, vacunas, baños o paseos de tu compañero.
+                        Crea alertas para medicamentos con varias dosis al día, vacunas, baños o paseos de tu compañero.
                      </p>
                      <button
-                        onClick={() => setShowModal(true)}
+                        onClick={openCreateModal}
                         className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition shadow-sm inline-flex items-center gap-1.5"
                      >
                         <Plus className="w-4 h-4" /> Agregar primer recordatorio
@@ -498,10 +721,10 @@ export default function RecordatoriosPage() {
                      {filteredReminders.map((item) => {
                         const isMed = item.category === 'medicamento';
                         const isVac = item.category === 'vacuna_desparasitacion';
-                        const isWalk = item.category === 'bano_paseo';
 
                         const iconBg = isMed ? 'bg-pink-500' : isVac ? 'bg-sky-500' : 'bg-emerald-500';
                         const IconComponent = isMed ? Pill : isVac ? Syringe : Sparkles;
+                        const parsedSchedule = parseScheduleDisplay(item.time_schedule);
 
                         return (
                            <div
@@ -546,18 +769,33 @@ export default function RecordatoriosPage() {
                                     </div>
                                  </div>
 
-                                 {/* Badges de Frecuencia y Horario */}
-                                 <div className="flex flex-wrap gap-2 pt-1">
+                                 {/* Badges de Frecuencia, Fecha y Múltiples Horas */}
+                                 <div className="flex flex-wrap gap-1.5 pt-1">
                                     {item.frequency && (
                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-100 text-neutral-700 text-xs font-semibold">
-                                          <Calendar className="w-3 h-3 text-neutral-400" />
+                                          <Repeat className="w-3 h-3 text-neutral-500" />
                                           {item.frequency}
                                        </span>
                                     )}
-                                    {item.time_schedule && (
+                                    {parsedSchedule.date && (
+                                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 text-xs font-semibold border border-sky-100">
+                                          <Calendar className="w-3 h-3 text-sky-500" />
+                                          {parsedSchedule.date}
+                                       </span>
+                                    )}
+                                    {parsedSchedule.times.map((hhmm, idx) => (
+                                       <span
+                                          key={`${item.id}-${hhmm}-${idx}`}
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-pink-50 text-pink-700 text-xs font-bold border border-pink-100"
+                                       >
+                                          <Clock className="w-3 h-3 text-pink-500" />
+                                          {hhmm}
+                                       </span>
+                                    ))}
+                                    {parsedSchedule.fallback && (
                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-pink-50 text-pink-700 text-xs font-bold border border-pink-100">
                                           <Clock className="w-3 h-3 text-pink-500" />
-                                          {item.time_schedule}
+                                          {parsedSchedule.fallback}
                                        </span>
                                     )}
                                  </div>
@@ -578,13 +816,22 @@ export default function RecordatoriosPage() {
                                  >
                                     <Volume2 className="w-3.5 h-3.5" /> Probar Alerta
                                  </button>
-                                 <button
-                                    onClick={() => handleDelete(item.id)}
-                                    className="text-neutral-400 hover:text-red-600 transition p-1"
-                                    title="Eliminar recordatorio"
-                                 >
-                                    <Trash2 className="w-4 h-4" />
-                                 </button>
+                                 <div className="flex items-center gap-2">
+                                    <button
+                                       onClick={() => openEditModal(item)}
+                                       className="text-neutral-500 hover:text-sky-600 font-semibold flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-sky-50 transition"
+                                       title="Editar horarios o detalles"
+                                    >
+                                       <Pencil className="w-3.5 h-3.5" /> Editar
+                                    </button>
+                                    <button
+                                       onClick={() => handleDelete(item.id)}
+                                       className="text-neutral-400 hover:text-red-600 transition p-1"
+                                       title="Eliminar recordatorio"
+                                    >
+                                       <Trash2 className="w-4 h-4" />
+                                    </button>
+                                 </div>
                               </div>
                            </div>
                         );
@@ -595,20 +842,27 @@ export default function RecordatoriosPage() {
 
          </div>
 
-         {/* Modal para Crear Recordatorio */}
+         {/* Modal Rediseñado para Crear / Editar Recordatorio */}
          {showModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4">
-               <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+               <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto">
                   <div className="flex items-center justify-between pb-3 border-b">
-                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-pink-500 text-white flex items-center justify-center font-bold">
-                           <Plus className="w-5 h-5" />
+                     <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-pink-600 text-white flex items-center justify-center font-bold shadow-sm">
+                           {editingId ? <Pencil className="w-4 h-4" /> : <Plus className="w-5 h-5" />}
                         </div>
-                        <h2 className="font-extrabold text-lg text-neutral-900">Nuevo Recordatorio</h2>
+                        <div>
+                           <h2 className="font-extrabold text-lg text-neutral-900 leading-tight">
+                              {editingId ? 'Editar Recordatorio' : 'Nuevo Recordatorio'}
+                           </h2>
+                           <p className="text-[11px] text-neutral-400">
+                              Configura una o varias horas exactas al día según su tratamiento o rutina
+                           </p>
+                        </div>
                      </div>
                      <button
                         onClick={() => setShowModal(false)}
-                        className="text-neutral-400 hover:text-neutral-600 p-1"
+                        className="text-neutral-400 hover:text-neutral-600 p-1 rounded-lg hover:bg-neutral-100"
                      >
                         <X className="w-5 h-5" />
                      </button>
@@ -626,16 +880,16 @@ export default function RecordatoriosPage() {
                               { id: 'vacuna_desparasitacion', label: 'Vacunas', icon: Syringe },
                               { id: 'bano_paseo', label: 'Baños/Paseos', icon: Sparkles },
                            ].map((c) => {
-                              const isSelected = formData.category === c.id;
+                              const isSelected = category === c.id;
                               const Icon = c.icon;
                               return (
                                  <button
                                     key={c.id}
                                     type="button"
-                                    onClick={() => setFormData({ ...formData, category: c.id as any })}
+                                    onClick={() => handleCategorySwitchInModal(c.id as ReminderCategory)}
                                     className={`p-3 rounded-xl border text-center transition flex flex-col items-center gap-1.5 ${
                                        isSelected
-                                          ? 'border-pink-600 bg-pink-50/70 text-pink-700 font-bold'
+                                          ? 'border-pink-600 bg-pink-50/70 text-pink-700 font-bold shadow-sm'
                                           : 'border-neutral-200 text-neutral-600 hover:bg-neutral-50'
                                     }`}
                                  >
@@ -647,80 +901,259 @@ export default function RecordatoriosPage() {
                         </div>
                      </div>
 
-                     {/* Selección de Mascota */}
-                     {userPets && userPets.length > 0 && (
-                        <div>
-                           <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
-                              Mascota
-                           </label>
-                           <select
-                              value={formData.pet_id}
-                              onChange={(e) => setFormData({ ...formData, pet_id: e.target.value })}
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                           >
-                              {userPets.map((p) => (
-                                 <option key={p.id} value={p.id}>
-                                    {p.name} ({p.species})
-                                 </option>
-                              ))}
-                           </select>
-                        </div>
-                     )}
+                     {/* Mascota y Título */}
+                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                        {userPets && userPets.length > 0 && (
+                           <div className="sm:col-span-5">
+                              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
+                                 Mascota
+                              </label>
+                              <select
+                                 value={petId}
+                                 onChange={(e) => setPetId(e.target.value)}
+                                 className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                              >
+                                 {userPets.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                       {p.name} ({p.species})
+                                    </option>
+                                 ))}
+                              </select>
+                           </div>
+                        )}
 
-                     {/* Nombre / Título */}
-                     <div>
-                        <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
-                           {formData.category === 'medicamento'
-                              ? 'Nombre del Medicamento'
-                              : formData.category === 'vacuna_desparasitacion'
-                              ? 'Vacuna o Desparasitante'
-                              : 'Actividad (Baño o Paseo)'}
-                        </label>
-                        <input
-                           type="text"
-                           required
-                           value={formData.title}
-                           onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                           placeholder={
-                              formData.category === 'medicamento'
-                                 ? 'Ej: Amoxicilina 250mg, Gotas oculares'
-                                 : formData.category === 'vacuna_desparasitacion'
-                                 ? 'Ej: Vacuna Antirrábica, Nexgard Spectra'
-                                 : 'Ej: Paseo matutino de 30 min, Baño antipulgas'
-                           }
-                           className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-pink-500"
-                        />
-                     </div>
-
-                     {/* Frecuencia y Horario Estándar */}
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
+                        <div className={userPets && userPets.length > 0 ? 'sm:col-span-7' : 'sm:col-span-12'}>
                            <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
-                              Frecuencia
-                           </label>
-                           <select
-                              value={formData.frequency}
-                              onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                           >
-                              <option value="Diariamente">Diariamente</option>
-                              <option value="Semanal">Semanal</option>
-                              <option value="Mensual">Mensual</option>
-                              <option value="Anual">Anual</option>
-                           </select>
-                        </div>
-
-                        <div>
-                           <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
-                              Hora de la Alerta
+                              {category === 'medicamento'
+                                 ? 'Nombre del Medicamento'
+                                 : category === 'vacuna_desparasitacion'
+                                 ? 'Vacuna o Desparasitante'
+                                 : 'Actividad (Baño o Paseo)'}
                            </label>
                            <input
-                              type="time"
+                              type="text"
                               required
-                              value={formData.time_schedule}
-                              onChange={(e) => setFormData({ ...formData, time_schedule: e.target.value })}
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                              value={title}
+                              onChange={(e) => setTitle(e.target.value)}
+                              placeholder={
+                                 category === 'medicamento'
+                                    ? 'Ej: Amoxicilina 250mg, Gotas'
+                                    : category === 'vacuna_desparasitacion'
+                                    ? 'Ej: Vacuna Antirrábica, Nexgard'
+                                    : 'Ej: Paseo parque, Baño antipulgas'
+                              }
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-pink-500"
                            />
+                        </div>
+                     </div>
+
+                     {/* Bloque Rediseñado de Programación Flexible */}
+                     <div className="bg-neutral-50/90 border border-neutral-200/80 rounded-2xl p-4 space-y-4">
+                        <div>
+                           <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-2">
+                              ¿Cómo se repite este recordatorio?
+                           </label>
+                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                              {[
+                                 { id: 'multi', label: 'Varias veces / día' },
+                                 { id: 'diario', label: '1 vez al día' },
+                                 { id: 'dias', label: 'Días específicos' },
+                                 { id: 'fecha', label: 'Fecha concreta' },
+                              ].map((mode) => {
+                                 const active = scheduleMode === mode.id;
+                                 return (
+                                    <button
+                                       key={mode.id}
+                                       type="button"
+                                       onClick={() => {
+                                          const nextMode = mode.id as ScheduleMode;
+                                          setScheduleMode(nextMode);
+                                          if (nextMode === 'multi' && times.length < 2) {
+                                             setMultiLabel('Cada 12 horas');
+                                             setTimes([times[0] || '08:00', addHoursToTime(times[0] || '08:00', 12)]);
+                                          } else if (nextMode === 'diario' && times.length === 0) {
+                                             setTimes(['08:00']);
+                                          }
+                                       }}
+                                       className={`px-2.5 py-2 rounded-xl text-xs font-bold border transition ${
+                                          active
+                                             ? 'bg-pink-600 text-white border-pink-600 shadow-sm'
+                                             : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-100'
+                                       }`}
+                                    >
+                                       {mode.label}
+                                    </button>
+                                 );
+                              })}
+                           </div>
+                        </div>
+
+                        {/* Atajos de intervalo cuando es varias veces al día */}
+                        {scheduleMode === 'multi' && (
+                           <div className="space-y-2">
+                              <span className="text-[11px] font-semibold text-neutral-500 block">
+                                 Atajos rápidos (calcula las horas desde tu primera toma):
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                 {[
+                                    { label: 'Cada 6 horas', hours: 6 },
+                                    { label: 'Cada 8 horas', hours: 8 },
+                                    { label: 'Cada 12 horas', hours: 12 },
+                                 ].map((preset) => (
+                                    <button
+                                       key={preset.label}
+                                       type="button"
+                                       onClick={() => applyIntervalPreset(preset.hours, preset.label)}
+                                       className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                                          multiLabel === preset.label
+                                             ? 'bg-sky-50 border-sky-400 text-sky-700'
+                                             : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-100'
+                                       }`}
+                                    >
+                                       {preset.label}
+                                    </button>
+                                 ))}
+                                 <button
+                                    type="button"
+                                    onClick={applyWalkPreset}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                                       multiLabel === '2 veces al día'
+                                          ? 'bg-sky-50 border-sky-400 text-sky-700'
+                                          : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-100'
+                                    }`}
+                                 >
+                                    Mañana y tarde
+                                 </button>
+                              </div>
+                           </div>
+                        )}
+
+                        {/* Selector de días específicos */}
+                        {scheduleMode === 'dias' && (
+                           <div className="space-y-2">
+                              <span className="text-[11px] font-semibold text-neutral-500 block">
+                                 Selecciona los días de la semana:
+                              </span>
+                              <div className="grid grid-cols-7 gap-1.5">
+                                 {WEEKDAYS.map((day) => {
+                                    const active = selectedDays.includes(day.key);
+                                    return (
+                                       <button
+                                          key={day.key}
+                                          type="button"
+                                          onClick={() => toggleWeekday(day.key)}
+                                          className={`py-2 rounded-xl text-xs font-bold border transition flex flex-col items-center ${
+                                             active
+                                                ? 'bg-pink-600 text-white border-pink-600 shadow-sm'
+                                                : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-100'
+                                          }`}
+                                       >
+                                          <span>{day.key}</span>
+                                       </button>
+                                    );
+                                 })}
+                              </div>
+                           </div>
+                        )}
+
+                        {/* Fecha concreta / Mensual / Anual */}
+                        {scheduleMode === 'fecha' ? (
+                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                              <div>
+                                 <label className="block text-[11px] font-bold text-neutral-600 mb-1">
+                                    Repetición
+                                 </label>
+                                 <select
+                                    value={dateRecurrence}
+                                    onChange={(e) => setDateRecurrence(e.target.value as DateRecurrence)}
+                                    className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-xs font-semibold text-neutral-800 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                 >
+                                    <option value="Una sola vez">Una sola vez</option>
+                                    <option value="Mensual">Cada mes</option>
+                                    <option value="Anual">Cada año</option>
+                                 </select>
+                              </div>
+                              <div>
+                                 <label className="block text-[11px] font-bold text-neutral-600 mb-1">
+                                    Fecha
+                                 </label>
+                                 <input
+                                    type="date"
+                                    required
+                                    value={specificDate}
+                                    onChange={(e) => setSpecificDate(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-xs font-semibold text-neutral-800 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                 />
+                              </div>
+                              <div>
+                                 <label className="block text-[11px] font-bold text-neutral-600 mb-1">
+                                    Hora de Alerta
+                                 </label>
+                                 <input
+                                    type="time"
+                                    required
+                                    value={times[0] || '09:00'}
+                                    onChange={(e) => setTimes([e.target.value])}
+                                    className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-xs font-semibold text-neutral-800 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                 />
+                              </div>
+                           </div>
+                        ) : (
+                           /* Editor de una o múltiples horas específicas */
+                           <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                 <span className="text-[11px] font-bold text-neutral-600 uppercase tracking-wider">
+                                    Horas de alerta ({times.length})
+                                 </span>
+                                 {times.length < 8 && (
+                                    <button
+                                       type="button"
+                                       onClick={handleAddTimeSlot}
+                                       className="text-xs font-bold text-pink-600 hover:text-pink-700 inline-flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-pink-50 transition"
+                                    >
+                                       <Plus className="w-3.5 h-3.5" /> Agregar hora
+                                    </button>
+                                 )}
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                 {times.map((timeVal, idx) => (
+                                    <div
+                                       key={idx}
+                                       className="flex items-center gap-1.5 bg-white border border-neutral-200 rounded-xl px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-pink-500"
+                                    >
+                                       <Clock className="w-3.5 h-3.5 text-pink-500 shrink-0" />
+                                       <input
+                                          type="time"
+                                          required
+                                          value={timeVal}
+                                          onChange={(e) => handleUpdateTimeAt(idx, e.target.value)}
+                                          className="w-full text-xs font-bold text-neutral-800 bg-transparent focus:outline-none"
+                                       />
+                                       {times.length > 1 && (
+                                          <button
+                                             type="button"
+                                             onClick={() => handleRemoveTimeSlot(idx)}
+                                             className="text-neutral-400 hover:text-rose-600 p-0.5 transition"
+                                             aria-label="Quitar hora"
+                                          >
+                                             <X className="w-3.5 h-3.5" />
+                                          </button>
+                                       )}
+                                    </div>
+                                 ))}
+                              </div>
+                           </div>
+                        )}
+
+                        {/* Vista previa resumida */}
+                        <div className="bg-white border border-sky-100 rounded-xl px-3 py-2 text-[11px] text-neutral-600 flex items-center justify-between gap-2">
+                           <span className="font-semibold text-sky-700 truncate">
+                              Programación: {serializedFrequency}
+                           </span>
+                           <span className="font-bold text-pink-600 shrink-0">
+                              {serializedTimeSchedule}
+                           </span>
                         </div>
                      </div>
 
@@ -731,14 +1164,14 @@ export default function RecordatoriosPage() {
                         </label>
                         <textarea
                            rows={2}
-                           value={formData.notes}
-                           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                           value={notes}
+                           onChange={(e) => setNotes(e.target.value)}
                            placeholder={
-                              formData.category === 'medicamento'
-                                 ? 'Ej: Dar después de comer con un premio'
-                                 : formData.category === 'vacuna_desparasitacion'
+                              category === 'medicamento'
+                                 ? 'Ej: 1 tableta después de comer con agua'
+                                 : category === 'vacuna_desparasitacion'
                                  ? 'Ej: En la veterinaria PetSalud'
-                                 : 'Ej: Usar shampoo hipoalergénico'
+                                 : 'Ej: Paseo de 30 min por el parque'
                            }
                            className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-pink-500 resize-none"
                         />
@@ -746,7 +1179,7 @@ export default function RecordatoriosPage() {
 
                      <div className="flex items-center gap-2 p-2.5 bg-pink-50 border border-pink-100 rounded-xl text-xs text-pink-700">
                         <Bell className="w-4 h-4 text-pink-600 shrink-0" />
-                        <span>Recibirás un correo al programar la alerta y otro en el momento exacto de la hora configurada.</span>
+                        <span>Recibirás un correo al guardar y otro en cada hora programada.</span>
                      </div>
 
                      <div className="flex items-center justify-end gap-3 pt-3 border-t">
@@ -762,7 +1195,7 @@ export default function RecordatoriosPage() {
                            disabled={submitting}
                            className="px-5 py-2.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-pink-200 disabled:opacity-50"
                         >
-                           {submitting ? 'Guardando...' : 'Guardar Recordatorio'}
+                           {submitting ? 'Guardando...' : editingId ? 'Actualizar Recordatorio' : 'Guardar Recordatorio'}
                         </button>
                      </div>
                   </form>
@@ -773,4 +1206,3 @@ export default function RecordatoriosPage() {
       </div>
    );
 }
-
