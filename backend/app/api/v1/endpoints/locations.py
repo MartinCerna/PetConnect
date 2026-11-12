@@ -51,20 +51,37 @@ def _maybe_trigger_google_sync(background_tasks: BackgroundTasks) -> None:
 @router.get("/sync-status")
 def sync_status(_: None = Depends(verify_ingest_key)):
     """Consulta el estado del sincronizador de Google Find My en el servidor."""
-    from google_location import get_sync_status
-    return {
-        "enable_google_sync": os.getenv("ENABLE_GOOGLE_SYNC", "false").lower() == "true",
-        "has_findmy_secrets": bool(os.getenv("GOOGLE_FINDMY_SECRETS")),
-        **get_sync_status(),
-    }
+    import traceback
+    try:
+        from google_location import get_sync_status
+        return {
+            "enable_google_sync": os.getenv("ENABLE_GOOGLE_SYNC", "false").lower() == "true",
+            "has_findmy_secrets": bool(os.getenv("GOOGLE_FINDMY_SECRETS")),
+            **get_sync_status(),
+        }
+    except Exception as e:
+        return {
+            "enable_google_sync": os.getenv("ENABLE_GOOGLE_SYNC", "false").lower() == "true",
+            "has_findmy_secrets": bool(os.getenv("GOOGLE_FINDMY_SECRETS")),
+            "import_error": str(e),
+            "traceback": traceback.format_exc(),
+        }
 
 
 @router.post("/sync-now")
 def sync_now(_: None = Depends(verify_ingest_key)):
     """Ejecuta de forma síncrona la consulta y renovación de llaves en Google Find My."""
-    from google_location import ejecutar_sincronizacion_google, get_sync_status
-    ok = ejecutar_sincronizacion_google()
-    return {"ok": ok, **get_sync_status()}
+    import traceback
+    try:
+        from google_location import ejecutar_sincronizacion_google, get_sync_status
+        ok = ejecutar_sincronizacion_google()
+        return {"ok": ok, **get_sync_status()}
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }
 
 
 @router.post("/", response_model=LocationResponse, status_code=status.HTTP_201_CREATED)
