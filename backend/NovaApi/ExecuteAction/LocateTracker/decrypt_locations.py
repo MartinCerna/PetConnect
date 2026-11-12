@@ -34,6 +34,16 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
             except Exception:
                 dt = datetime.datetime.utcnow()
 
+            existing = (
+                db.query(LocationLog)
+                .filter(LocationLog.device_id == dev_id, LocationLog.recorded_at == dt)
+                .first()
+            )
+            if existing:
+                db.close()
+                print(f" => Coordenada ya registrada en BD para {dev_mac} ({dt}).")
+                return
+
             log = LocationLog(
                 device_id=dev_id,
                 latitude=float(latitude),

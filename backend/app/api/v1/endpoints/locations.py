@@ -1,8 +1,8 @@
 import os
 import secrets
 from typing import List, Optional
-from datetime import datetime
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from datetime import datetime, timezone
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -28,6 +28,45 @@ def verify_ingest_key(x_api_key: str = Header(default="", alias="X-API-Key")) ->
             detail="API key inválida.",
         )
 
+
+def _maybe_trigger_google_sync(background_tasks: BackgroundTasks) -> None:
+    """Dispara una sincronización en segundo plano si ENABLE_GOOGLE_SYNC está activo y pasó >120s."""
+    if os.getenv("ENABLE_GOOGLE_SYNC", "false").lower() != "true":
+        return
+    try:
+        from google_location import get_sync_status, ejecutar_sincronizacion_google
+        st = get_sync_status()
+        if st.get("is_running"):
+            return
+        last_attempt = st.get("last_attempt_at")
+        if last_attempt:
+            elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(last_attempt)).total_seconds()
+            if elapsed < 120:
+                return
+        background_tasks.add_task(ejecutar_sincronizacion_google)
+    except Exception as e:
+        print(f"[Auto-Sync] No se pudo verificar estado de sincronización: {e}", flush=True)
+
+
+@router.get("/sync-status")
+def sync_status(_: None = Depends(verify_ingest_key)):
+    """Consulta el estado del sincronizador de Google Find My en el servidor."""
+    from google_location import get_sync_status
+    return {
+        "enable_google_sync": os.getenv("ENABLE_GOOGLE_SYNC", "false").lower() == "true",
+        "has_findmy_secrets": bool(os.getenv("GOOGLE_FINDMY_SECRETS")),
+        **get_sync_status(),
+    }
+
+
+@router.post("/sync-now")
+def sync_now(_: None = Depends(verify_ingest_key)):
+    """Ejecuta de forma síncrona la consulta y renovación de llaves en Google Find My."""
+    from google_location import ejecutar_sincronizacion_google, get_sync_status
+    ok = ejecutar_sincronizacion_google()
+    return {"ok": ok, **get_sync_status()}
+
+
 @router.post("/", response_model=LocationResponse, status_code=status.HTTP_201_CREATED)
 def record_location(
     location_in: LocationCreate,
@@ -51,22 +90,33 @@ def record_location(
             detail="Dispositivo no encontrado en el sistema."
         )
 
+    recorded_dt = location_in.recorded_at or datetime.utcnow()
+    existing = (
+        db.query(LocationLog)
+        .filter(LocationLog.device_id == device.id, LocationLog.recorded_at == recorded_dt)
+        .first()
+    )
+    if existing:
+        return existing
+
     new_location = LocationLog(
         device_id=device.id,
         latitude=location_in.latitude,
         longitude=location_in.longitude,
         altitude=location_in.altitude or 0.0,
         battery_level=location_in.battery_level,
-        recorded_at=location_in.recorded_at or datetime.utcnow()
+        recorded_at=recorded_dt
     )
     db.add(new_location)
     db.commit()
     db.refresh(new_location)
     return new_location
 
+
 @router.get("/pet/{pet_id}/latest", response_model=Optional[LocationResponse])
 def get_latest_pet_location(
     pet_id: UUID,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -80,6 +130,8 @@ def get_latest_pet_location(
     if not pet.device_id:
         return None
 
+    _maybe_trigger_google_sync(background_tasks)
+
     latest_location = (
         db.query(LocationLog)
         .filter(LocationLog.device_id == pet.device_id)
@@ -91,6 +143,7 @@ def get_latest_pet_location(
         return None
 
     return latest_location
+
 
 @router.get("/pet/{pet_id}/history", response_model=List[LocationResponse])
 def get_pet_location_history(
