@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Phone, MapPin, User, ShieldAlert, Heart, Navigation, Send, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { API_BASE } from '@/lib/api';
+import SheltersCard from '@/components/SheltersCard';
 
 interface PetContactInfo {
    pet_id: string;
@@ -252,6 +253,9 @@ export default function PublicPetTagPage() {
                </div>
 
             </div>
+
+            {/* Tarjeta de Albergues donde dejar a la mascota */}
+            <SheltersCard petName={data.name} />
 
             {/* Pie de página */}
             <div className="text-center text-xs text-neutral-500 pb-6">

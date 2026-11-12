@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { Phone, MapPin, User, CheckCircle2, QrCode, ExternalLink, Copy, Check, HeartHandshake, Sparkles, ShieldCheck } from 'lucide-react';
+import { Phone, MapPin, User, CheckCircle2, QrCode, ExternalLink, Copy, Check, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
+import SheltersCard from '@/components/SheltersCard';
 
 export default function ContactoEmergenciaPage() {
    const { user, userPets, selectedPet, setSelectedPet, updateProfile } = useAuth();
@@ -334,6 +335,9 @@ export default function ContactoEmergenciaPage() {
 
                      </div>
                   </div>
+
+                  {/* Tarjeta de Albergues debajo de la opción de Placa Pública */}
+                  <SheltersCard petName={currentPet?.name} />
 
                </div>
 
