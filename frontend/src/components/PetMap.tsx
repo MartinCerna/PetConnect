@@ -3,11 +3,13 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { getBatteryVisuals } from './BatteryBadge';
 
 export interface Location {
    id: number;
    latitude: number;
    longitude: number;
+   battery_level?: number | null;
    recorded_at: string;
 }
 
@@ -21,6 +23,8 @@ interface PetMapProps {
    trailLocations?: Location[];
    showTrail?: boolean;
    petName?: string;
+   batteryLevel?: number | null;
+   isCharging?: boolean;
    homeLocation?: HomeCoordinates | null;
    safeRadiusMeters?: number;
    safeZoneEnabled?: boolean;
@@ -79,6 +83,8 @@ export default function PetMap({
    trailLocations = [],
    showTrail = true,
    petName,
+   batteryLevel,
+   isCharging = false,
    homeLocation,
    safeRadiusMeters = 150,
    safeZoneEnabled = false,
@@ -151,6 +157,13 @@ export default function PetMap({
 
       if (locations.length > 0) {
          const latestLoc = locations[0];
+         const batt = getBatteryVisuals(batteryLevel ?? latestLoc.battery_level, isCharging);
+         const batteryHtml =
+            batt.pct !== null
+               ? `<div style="margin-top: 5px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; background: ${batt.pillBgHex}; color: ${batt.hex}; font-weight: 700; font-size: 11px;">
+                     🔋 ${batt.pct}% · ${batt.label}
+                  </div>`
+               : '';
          const marker = L.marker([latestLoc.latitude, latestLoc.longitude], { icon: customIcon });
          marker.bindPopup(`
             <div style="font-family: inherit; font-size: 13px; color: #171717;">
@@ -161,6 +174,7 @@ export default function PetMap({
                <span style="color: #666; font-size: 11px;">
                   ${new Date(latestLoc.recorded_at).toLocaleString()}
                </span>
+               ${batteryHtml}
             </div>
          `);
          markersLayer.addLayer(marker);
@@ -174,7 +188,7 @@ export default function PetMap({
          map.setView(DEFAULT_CENTER, 15);
          lastCenteredKeyRef.current = 'default';
       }
-   }, [locations, petName, isOutsideSafeZone, isEditingSafeZone]);
+   }, [locations, petName, batteryLevel, isCharging, isOutsideSafeZone, isEditingSafeZone]);
 
    // 3. Dibujar rastro de huellitas (últimas 10 ubicaciones) y línea direccional
    useEffect(() => {

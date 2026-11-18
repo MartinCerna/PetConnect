@@ -246,3 +246,37 @@ def notify_geofence_exit(
             "target_url": "/dashboard",
         },
     )
+
+
+def notify_low_battery(
+    db: Session,
+    user_id,
+    pet_id,
+    pet_name: str,
+    device_mac: str,
+    battery_level: int,
+    battery_voltage: Optional[float] = None,
+) -> AppNotification:
+    """Alerta al dueño cuando la batería del collar ESP32-C3 baja al umbral crítico (<= 15%)."""
+    voltage_text = f" ({battery_voltage:.2f} V)" if battery_voltage is not None else ""
+    notif_title = f"🪫 Batería baja en el collar de {pet_name} ({battery_level}%)"
+    notif_body = (
+        f"El tag {device_mac} está al {battery_level}%{voltage_text}. "
+        "Conéctalo al cargador para no perder el rastreo."
+    )
+
+    return create_and_push_notification(
+        db=db,
+        user_id=user_id,
+        pet_id=pet_id,
+        notif_type="battery_low",
+        title=notif_title,
+        body=notif_body,
+        data={
+            "pet_name": pet_name,
+            "device_mac": device_mac,
+            "battery_level": battery_level,
+            "battery_voltage": battery_voltage,
+            "target_url": "/dashboard/dispositivos",
+        },
+    )

@@ -1,20 +1,23 @@
 // src/app/dashboard/dispositivos/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch, errorMessage } from '@/lib/api';
+import BatteryBadge from '@/components/BatteryBadge';
 import {
    Cpu,
    Link as LinkIcon,
    Minus,
    Plus,
+   RefreshCw,
    ShoppingBag,
    ShoppingCart,
    Sparkles,
    Trash2,
+   Zap,
 } from 'lucide-react';
 
 interface ProductColor {
@@ -38,8 +41,21 @@ interface DeviceItem {
    device_mac: string;
    tracker_index?: number;
    status: string;
+   battery_level?: number | null;
+   battery_voltage?: number | null;
+   is_charging?: boolean;
+   battery_updated_at?: string | null;
    created_at: string;
 }
+
+const BATTERY_PRESETS: { label: string; level: number; voltage: number; charging?: boolean }[] = [
+   { label: '100%', level: 100, voltage: 4.2 },
+   { label: '75%', level: 75, voltage: 3.96 },
+   { label: '45%', level: 45, voltage: 3.8 },
+   { label: '22%', level: 22, voltage: 3.68 },
+   { label: '10%', level: 10, voltage: 3.55 },
+   { label: 'Cargando', level: 82, voltage: 4.12, charging: true },
+];
 
 export default function DispositivosPage() {
    const router = useRouter();
@@ -53,8 +69,9 @@ export default function DispositivosPage() {
    const [successMsg, setSuccessMsg] = useState('');
    const [selectedColor, setSelectedColor] = useState<ProductColor>(PRODUCT_COLORS[0]);
    const [quantity, setQuantity] = useState(1);
+   const [updatingBatteryId, setUpdatingBatteryId] = useState<string | null>(null);
 
-   const fetchDevices = async () => {
+   const fetchDevices = useCallback(async () => {
       try {
          const res = await apiFetch('/devices/');
          if (res.ok) {
@@ -65,11 +82,43 @@ export default function DispositivosPage() {
       } finally {
          setLoading(false);
       }
-   };
+   }, []);
 
    useEffect(() => {
       fetchDevices();
-   }, []);
+      const id = setInterval(fetchDevices, 30_000);
+      return () => clearInterval(id);
+   }, [fetchDevices]);
+
+   const handleUpdateBattery = async (
+      deviceId: string,
+      level: number,
+      voltage: number,
+      isCharging = false
+   ) => {
+      setUpdatingBatteryId(deviceId);
+      setError('');
+      try {
+         const res = await apiFetch(`/devices/${deviceId}/battery`, {
+            method: 'PUT',
+            body: JSON.stringify({
+               battery_level: level,
+               battery_voltage: voltage,
+               is_charging: isCharging,
+            }),
+         });
+         if (res.ok) {
+            const updated: DeviceItem = await res.json();
+            setDevices((prev) => prev.map((d) => (d.id === deviceId ? updated : d)));
+         } else {
+            setError(await errorMessage(res, 'No se pudo actualizar el nivel de batería.'));
+         }
+      } catch {
+         setError('Error al conectar con el servidor.');
+      } finally {
+         setUpdatingBatteryId(null);
+      }
+   };
 
    const handleRegisterDevice = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -250,7 +299,17 @@ export default function DispositivosPage() {
 
          {/* Lista de dispositivos */}
          <div className="space-y-4">
-            <h2 className="text-lg font-bold text-neutral-900">Tags Registrados</h2>
+            <div className="flex items-center justify-between gap-2">
+               <h2 className="text-lg font-bold text-neutral-900">Tags Registrados</h2>
+               <button
+                  type="button"
+                  onClick={fetchDevices}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-neutral-200 hover:bg-neutral-50 text-xs font-semibold text-neutral-700 transition"
+               >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Actualizar estado
+               </button>
+            </div>
             {loading ? (
                <p className="text-sm text-neutral-400">Cargando tags...</p>
             ) : devices.length === 0 ? (
@@ -260,7 +319,7 @@ export default function DispositivosPage() {
             ) : (
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {devices.map((dev) => {
-                     const currentPet = userPets.find((p) => (p as any).device_id === dev.id);
+                     const currentPet = userPets.find((p) => p.device_id === dev.id);
                      return (
                         <div
                            key={dev.id}
@@ -290,6 +349,42 @@ export default function DispositivosPage() {
                                  >
                                     <Trash2 className="w-4 h-4" />
                                  </button>
+                              </div>
+                           </div>
+
+                           {/* Estado de batería con porcentaje, voltaje y escala de colores */}
+                           <div className="space-y-2">
+                              <BatteryBadge
+                                 variant="detailed"
+                                 level={dev.battery_level}
+                                 voltage={dev.battery_voltage}
+                                 isCharging={Boolean(dev.is_charging)}
+                                 updatedAt={dev.battery_updated_at}
+                                 title="Estado de batería LiPo"
+                              />
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                 <span className="text-[10px] font-semibold text-neutral-400 mr-0.5">
+                                    Prueba rápida:
+                                 </span>
+                                 {BATTERY_PRESETS.map((preset) => (
+                                    <button
+                                       key={preset.label}
+                                       type="button"
+                                       disabled={updatingBatteryId === dev.id}
+                                       onClick={() =>
+                                          handleUpdateBattery(
+                                             dev.id,
+                                             preset.level,
+                                             preset.voltage,
+                                             Boolean(preset.charging)
+                                          )
+                                       }
+                                       className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-[10px] font-bold transition disabled:opacity-50"
+                                    >
+                                       {preset.charging && <Zap className="w-2.5 h-2.5 text-sky-600" />}
+                                       {preset.label}
+                                    </button>
+                                 ))}
                               </div>
                            </div>
 

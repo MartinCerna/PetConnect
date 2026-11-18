@@ -1,4 +1,6 @@
-from fastapi import Depends, HTTPException, status
+import os
+import secrets
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from pydantic import ValidationError
@@ -43,3 +45,18 @@ def get_current_user(
         raise HTTPException(status_code=400, detail="Usuario inactivo")
         
     return user
+
+
+def verify_ingest_key(x_api_key: str = Header(default="", alias="X-API-Key")) -> None:
+    """Valida la clave de ingesta para telemetría de dispositivos ESP32 y worker de sincronización."""
+    expected = os.getenv("INGEST_API_KEY")
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="INGEST_API_KEY no está configurada en el servidor.",
+        )
+    if not secrets.compare_digest(x_api_key, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API key inválida.",
+        )

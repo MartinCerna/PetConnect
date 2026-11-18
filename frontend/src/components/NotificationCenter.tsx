@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+   BatteryWarning,
    Bell,
    BellRing,
    Check,
@@ -481,6 +482,7 @@ export function NotificationCenterDrawer({
                ) : (
                   notifications.map((item) => {
                      const isGeofence = item.type === 'geofence_exit';
+                     const isLowBattery = item.type === 'battery_low';
                      const isReminder =
                         item.type === 'reminder_due' || item.type === 'reminder_created';
                      const lat = item.data?.latitude;
@@ -500,7 +502,9 @@ export function NotificationCenterDrawer({
                                  ? 'bg-white border-neutral-200/80'
                                  : isGeofence
                                    ? 'bg-rose-50/70 border-rose-200 shadow-xs'
-                                   : 'bg-pink-50/50 border-pink-200 shadow-xs'
+                                   : isLowBattery
+                                     ? 'bg-amber-50/80 border-amber-200 shadow-xs'
+                                     : 'bg-pink-50/50 border-pink-200 shadow-xs'
                            }`}
                         >
                            <div className="flex items-start justify-between gap-2.5">
@@ -509,13 +513,17 @@ export function NotificationCenterDrawer({
                                     className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
                                        isGeofence
                                           ? 'bg-rose-600 text-white'
-                                          : isReminder
-                                            ? 'bg-pink-600 text-white'
-                                            : 'bg-emerald-600 text-white'
+                                          : isLowBattery
+                                            ? 'bg-amber-500 text-white'
+                                            : isReminder
+                                              ? 'bg-pink-600 text-white'
+                                              : 'bg-emerald-600 text-white'
                                     }`}
                                  >
                                     {isGeofence ? (
                                        <ShieldAlert className="w-4 h-4" />
+                                    ) : isLowBattery ? (
+                                       <BatteryWarning className="w-4 h-4" />
                                     ) : isReminder ? (
                                        <BellRing className="w-4 h-4" />
                                     ) : (

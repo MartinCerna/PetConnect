@@ -58,6 +58,10 @@ class Device(Base):
     eid_key = Column(String(64), nullable=False)
     tracker_index = Column(Integer, default=1)
     status = Column(String(20), default="ACTIVE")
+    battery_level = Column(Integer, nullable=True, default=100)
+    battery_voltage = Column(Float, nullable=True)
+    is_charging = Column(Boolean, default=False)
+    battery_updated_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
     owner = relationship("User", back_populates="devices")

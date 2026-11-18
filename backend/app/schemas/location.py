@@ -9,7 +9,7 @@ class LocationCreate(BaseModel):
     latitude: float = Field(..., example=-12.046374, description="Latitud GPS")
     longitude: float = Field(..., example=-77.042793, description="Longitud GPS")
     altitude: Optional[float] = Field(default=0.0, example=10.5, description="Altitud en metros")
-    battery_level: Optional[int] = Field(default=100, example=95, description="Porcentaje de batería (0-100%)")
+    battery_level: Optional[int] = Field(default=None, ge=0, le=100, example=95, description="Porcentaje de batería (0-100%)")
     recorded_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="Fecha/hora de la captura")
 
 class LocationResponse(BaseModel):

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import RegisterPetModal from '@/components/RegisterPetModal';
+import BatteryBadge, { getBatteryVisuals } from '@/components/BatteryBadge';
 import { apiFetch } from '@/lib/api';
 import {
    requestMobileNotificationPermission,
@@ -12,6 +13,7 @@ import {
 } from '@/lib/mobileNotifications';
 import type { HomeCoordinates, Location } from '@/components/PetMap';
 import {
+   BatteryWarning,
    Check,
    ChevronDown,
    ChevronUp,
@@ -104,11 +106,21 @@ const PetMap = dynamic(() => import('@/components/PetMap'), {
 
 const REFRESH_MS = 30_000;
 
+interface DeviceTelemetry {
+   id: string;
+   device_mac: string;
+   battery_level?: number | null;
+   battery_voltage?: number | null;
+   is_charging?: boolean;
+   battery_updated_at?: string | null;
+}
+
 export default function DashboardPage() {
    const { userPets, selectedPet, setSelectedPet, updatePetSafeZone } = useAuth();
    const [showRegister, setShowRegister] = useState(false);
    const [locations, setLocations] = useState<Location[]>([]);
    const [trailLocations, setTrailLocations] = useState<Location[]>([]);
+   const [devices, setDevices] = useState<DeviceTelemetry[]>([]);
    const [showTrail, setShowTrail] = useState<boolean>(true);
    const [locationStatus, setLocationStatus] = useState('');
    const [cardCollapsedMobile, setCardCollapsedMobile] = useState(false);
@@ -163,11 +175,19 @@ export default function DashboardPage() {
    const loadLocations = useCallback(async () => {
       if (!petId) return;
       try {
-         // Consulta la última ubicación y, si el rastro está activo, las últimas 10 ubicaciones
-         const [resLatest, resHistory] = await Promise.all([
+         // Consulta última ubicación, rastro (si está activo) y telemetría de dispositivos
+         const [resLatest, resHistory, resDevices] = await Promise.all([
             apiFetch(`/locations/pet/${petId}/latest`),
             showTrail ? apiFetch(`/locations/pet/${petId}/history?limit=10`) : Promise.resolve(null),
+            apiFetch('/devices/'),
          ]);
+
+         if (resDevices.ok) {
+            const devList: DeviceTelemetry[] = await resDevices.json();
+            if (Array.isArray(devList)) {
+               setDevices(devList);
+            }
+         }
 
          if (resLatest.ok) {
             const data: Location | null = await resLatest.json();
@@ -228,6 +248,23 @@ export default function DashboardPage() {
    const activeEnabled = isEditingZone ? draftEnabled : Boolean(selectedPet?.safe_zone_enabled);
 
    const latestLocation = locations[0] ?? null;
+
+   const linkedDevice = useMemo<DeviceTelemetry | null>(() => {
+      if (!selectedPet?.device_id) return null;
+      return devices.find((d) => d.id === selectedPet.device_id) ?? null;
+   }, [devices, selectedPet?.device_id]);
+
+   const effectiveBatteryLevel = linkedDevice?.battery_level ?? latestLocation?.battery_level ?? null;
+   const effectiveBatteryVoltage = linkedDevice?.battery_voltage ?? null;
+   const effectiveIsCharging = Boolean(linkedDevice?.is_charging);
+   const effectiveBatteryUpdatedAt =
+      linkedDevice?.battery_updated_at ?? latestLocation?.recorded_at ?? null;
+   const hasDeviceOrBattery = Boolean(selectedPet?.device_id || effectiveBatteryLevel !== null);
+   const batteryVisuals = getBatteryVisuals(
+      effectiveBatteryLevel,
+      effectiveIsCharging,
+      effectiveBatteryVoltage
+   );
 
    const distanceFromHome = useMemo<number | null>(() => {
       if (!activeHome || !latestLocation) return null;
@@ -394,6 +431,8 @@ export default function DashboardPage() {
                trailLocations={trailLocations}
                showTrail={showTrail}
                petName={selectedPet?.name}
+               batteryLevel={effectiveBatteryLevel}
+               isCharging={effectiveIsCharging}
                homeLocation={activeHome}
                safeRadiusMeters={activeRadius}
                safeZoneEnabled={activeEnabled}
@@ -403,8 +442,8 @@ export default function DashboardPage() {
             />
          </div>
 
-         {/* BANNERS SUPERIORES FLOTANTES (Edición / Alerta de Salida) */}
-         {(isEditingZone || (isOutsideNow && !alertDismissed)) && (
+         {/* BANNERS SUPERIORES FLOTANTES (Edición / Alerta de Salida / Batería Crítica) */}
+         {(isEditingZone || (isOutsideNow && !alertDismissed) || (!isEditingZone && hasDeviceOrBattery && batteryVisuals.isCritical)) && (
             <div className="absolute top-3 sm:top-5 left-1/2 -translate-x-1/2 z-20 px-3 w-full max-w-xl pointer-events-none flex flex-col gap-2 items-center">
                {isEditingZone && (
                   <div className="pointer-events-auto bg-pink-600/95 backdrop-blur-md text-white px-4 py-2 rounded-full shadow-xl border border-pink-400/50 text-xs sm:text-sm font-medium flex items-center gap-2">
@@ -450,6 +489,29 @@ export default function DashboardPage() {
                      </div>
                   </div>
                )}
+
+               {!isEditingZone && hasDeviceOrBattery && batteryVisuals.isCritical && selectedPet && (
+                  <Link
+                     href="/dashboard/dispositivos"
+                     className="pointer-events-auto w-full bg-rose-600/95 hover:bg-rose-700 backdrop-blur-md text-white px-4 py-2.5 rounded-2xl shadow-xl border border-rose-400/60 flex items-center justify-between gap-3 transition-colors"
+                  >
+                     <div className="flex items-center gap-2.5 min-w-0">
+                        <BatteryWarning className="w-5 h-5 shrink-0 animate-pulse" />
+                        <div className="min-w-0">
+                           <p className="text-xs sm:text-sm font-bold leading-tight truncate">
+                              Batería crítica en el collar de {selectedPet.name}: {effectiveBatteryLevel}%
+                           </p>
+                           <p className="text-[11px] text-rose-100 truncate">
+                              {batteryVisuals.voltageText ? `Voltaje LiPo: ${batteryVisuals.voltageText} · ` : ''}
+                              Conecta el módulo de carga pronto.
+                           </p>
+                        </div>
+                     </div>
+                     <span className="px-2.5 py-1 rounded-xl bg-white text-rose-700 text-[11px] font-bold shrink-0">
+                        Ver Tag
+                     </span>
+                  </Link>
+               )}
             </div>
          )}
 
@@ -485,15 +547,40 @@ export default function DashboardPage() {
                               </div>
                            </div>
 
-                           {/* Botón para colapsar detalles en pantallas pequeñas */}
-                           <button
-                              onClick={() => setCardCollapsedMobile(!cardCollapsedMobile)}
-                              className="sm:hidden p-1.5 text-neutral-400 hover:text-neutral-600 rounded-lg hover:bg-neutral-100"
-                              aria-label="Alternar vista"
-                           >
-                              {cardCollapsedMobile ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-                           </button>
+                           <div className="flex items-center gap-1.5 shrink-0">
+                              {cardCollapsedMobile && hasDeviceOrBattery && (
+                                 <BatteryBadge
+                                    variant="compact"
+                                    level={effectiveBatteryLevel}
+                                    voltage={effectiveBatteryVoltage}
+                                    isCharging={effectiveIsCharging}
+                                 />
+                              )}
+                              {/* Botón para colapsar detalles en pantallas pequeñas */}
+                              <button
+                                 onClick={() => setCardCollapsedMobile(!cardCollapsedMobile)}
+                                 className="sm:hidden p-1.5 text-neutral-400 hover:text-neutral-600 rounded-lg hover:bg-neutral-100"
+                                 aria-label="Alternar vista"
+                              >
+                                 {cardCollapsedMobile ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                              </button>
+                           </div>
                         </div>
+
+                        {!cardCollapsedMobile && hasDeviceOrBattery && (
+                           <BatteryBadge
+                              variant="detailed"
+                              level={effectiveBatteryLevel}
+                              voltage={effectiveBatteryVoltage}
+                              isCharging={effectiveIsCharging}
+                              updatedAt={effectiveBatteryUpdatedAt}
+                              title={
+                                 linkedDevice
+                                    ? `Batería · ${linkedDevice.device_mac}`
+                                    : 'Batería del collar'
+                              }
+                           />
+                        )}
 
                         {!cardCollapsedMobile && userPets && userPets.length > 1 && (
                            <div className="pt-2 border-t border-neutral-100">
@@ -845,6 +932,22 @@ export default function DashboardPage() {
                      <Footprints className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                      <span>Huellitas{showTrail && trailLocations.length > 0 ? ` (${trailLocations.length})` : ''}</span>
                   </button>
+
+                  {hasDeviceOrBattery && (
+                     <Link href="/dashboard/dispositivos" className="hidden sm:inline-flex">
+                        <BatteryBadge
+                           variant="compact"
+                           level={effectiveBatteryLevel}
+                           voltage={effectiveBatteryVoltage}
+                           isCharging={effectiveIsCharging}
+                           title={
+                              linkedDevice
+                                 ? `Batería del tag ${linkedDevice.device_mac}`
+                                 : 'Batería del collar'
+                           }
+                        />
+                     </Link>
+                  )}
 
                   <div className="bg-white/95 backdrop-blur-md px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl shadow-lg border border-white/60 flex items-center gap-2">
                      <span className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>

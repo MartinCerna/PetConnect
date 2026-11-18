@@ -56,7 +56,7 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
                 latitude=float(latitude),
                 longitude=float(longitude),
                 altitude=float(altitude) if altitude else 0.0,
-                battery_level=100,
+                battery_level=device.battery_level if getattr(device, "battery_level", None) is not None else 100,
                 recorded_at=dt,
             )
             db.add(log)
@@ -94,7 +94,6 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
         "latitude": float(latitude),
         "longitude": float(longitude),
         "altitude": float(altitude) if altitude else 0.0,
-        "battery_level": 100,
         "recorded_at": timestamp_str,
     }
     try:

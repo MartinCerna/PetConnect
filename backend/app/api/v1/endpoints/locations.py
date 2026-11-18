@@ -1,32 +1,16 @@
 import os
-import secrets
 from typing import List, Optional
 from datetime import datetime, timezone
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.db.session import get_db
 from app.db.models import User, Device, Pet, LocationLog
 from app.schemas.location import LocationCreate, LocationResponse
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, verify_ingest_key
 
 router = APIRouter()
-
-
-def verify_ingest_key(x_api_key: str = Header(default="", alias="X-API-Key")) -> None:
-    """Solo el worker de sincronización (o un dispositivo autorizado) puede escribir ubicaciones."""
-    expected = os.getenv("INGEST_API_KEY")
-    if not expected:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="INGEST_API_KEY no está configurada en el servidor.",
-        )
-    if not secrets.compare_digest(x_api_key, expected):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key inválida.",
-        )
 
 
 def _maybe_trigger_google_sync(background_tasks: BackgroundTasks) -> None:
@@ -123,12 +107,21 @@ def record_location(
         .first()
     )
 
+    effective_battery = (
+        location_in.battery_level
+        if location_in.battery_level is not None
+        else (device.battery_level if device.battery_level is not None else 100)
+    )
+    if location_in.battery_level is not None:
+        device.battery_level = location_in.battery_level
+        device.battery_updated_at = datetime.now(timezone.utc)
+
     new_location = LocationLog(
         device_id=device.id,
         latitude=location_in.latitude,
         longitude=location_in.longitude,
         altitude=location_in.altitude or 0.0,
-        battery_level=location_in.battery_level,
+        battery_level=effective_battery,
         recorded_at=recorded_dt
     )
     db.add(new_location)

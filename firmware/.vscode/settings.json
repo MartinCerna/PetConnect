@@ -13,6 +13,6 @@
   "clangd.arguments": [
     "--background-index",
     "--query-driver=**",
-    "--compile-commands-dir=c:\\Users\\marti\\Documents\\Git\\GoogleFindMyTools\\ESP32Firmware\\build"
+    "--compile-commands-dir=c:\\Users\\marti\\Documents\\Git\\PetConnect\\firmware\\build"
   ]
 }
