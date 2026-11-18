@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.db.session import get_db, engine
-from app.db.models import Order, ContactMessage, Reminder
-from app.api.v1.endpoints import auth, pets, devices, locations, orders, contact, reminders
+from app.db.models import Order, ContactMessage, Reminder, AppNotification, PushSubscription
+from app.api.v1.endpoints import auth, pets, devices, locations, orders, contact, reminders, notifications
 
 # La sincronización con Google Find My es opcional: ENABLE_GOOGLE_SYNC=false la desactiva
 ENABLE_GOOGLE_SYNC = os.getenv("ENABLE_GOOGLE_SYNC", "false").lower() == "true"
@@ -42,16 +42,16 @@ HISTORIAL_ALERTAS_DISPARADAS = set()
 async def tarea_verificacion_alertas_recordatorios(intervalo_segundos: int = 60):
     """
     Verifica cada 60 segundos si algún recordatorio activo coincide con la hora actual
-    para despachar la alerta por correo electrónico al dueño de la mascota en tiempo real.
+    para despachar la notificación directa al teléfono del dueño de la mascota en tiempo real.
     """
     from datetime import datetime, timezone, timedelta
     from app.db.session import SessionLocal
     from app.db.models import Reminder
-    from app.core.email import send_reminder_due_alert_email
+    from app.core.notifications import notify_reminder_due
     from app.core.reminder_schedule import should_trigger_reminder
 
     await asyncio.sleep(10)
-    print("[Alertas-Recordatorios] Tarea en segundo plano iniciada (monitoreo cada 60s).", flush=True)
+    print("[Alertas-Recordatorios] Tarea en segundo plano iniciada (notificaciones móviles cada 60s).", flush=True)
 
     while True:
         try:
@@ -68,7 +68,7 @@ async def tarea_verificacion_alertas_recordatorios(intervalo_segundos: int = 60)
             )
 
             for r in recordatorios_activos:
-                if not r.time_schedule or not r.user or not r.user.email:
+                if not r.time_schedule or not r.user_id:
                     continue
 
                 if should_trigger_reminder(r.frequency, r.time_schedule, now_local, r.created_at):
@@ -76,17 +76,17 @@ async def tarea_verificacion_alertas_recordatorios(intervalo_segundos: int = 60)
                     if clave_alerta not in HISTORIAL_ALERTAS_DISPARADAS:
                         HISTORIAL_ALERTAS_DISPARADAS.add(clave_alerta)
                         pet_name = r.pet.name if r.pet else "Tu mascota"
-                        owner_name = r.user.full_name or "Dueño"
                         print(
-                            f"[Alertas-Recordatorios] ¡Enviando alerta en tiempo real a {r.user.email} "
+                            f"[Alertas-Recordatorios] ¡Enviando alerta móvil en tiempo real al usuario {r.user_id} "
                             f"para '{r.title}' ({pet_name}) a las {hora_actual}!",
                             flush=True,
                         )
-                        await asyncio.to_thread(
-                            send_reminder_due_alert_email,
-                            recipient_email=r.user.email,
-                            owner_name=owner_name,
+                        notify_reminder_due(
+                            db=db,
+                            user_id=r.user_id,
+                            pet_id=r.pet_id,
                             pet_name=pet_name,
+                            reminder_id=r.id,
                             title=r.title,
                             category=r.category,
                             frequency=r.frequency,
@@ -108,6 +108,8 @@ async def lifespan(app: FastAPI):
         Order.__table__.create(bind=engine, checkfirst=True)
         ContactMessage.__table__.create(bind=engine, checkfirst=True)
         Reminder.__table__.create(bind=engine, checkfirst=True)
+        AppNotification.__table__.create(bind=engine, checkfirst=True)
+        PushSubscription.__table__.create(bind=engine, checkfirst=True)
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS address VARCHAR(255);"))
             conn.execute(text("ALTER TABLE pets ADD COLUMN IF NOT EXISTS home_latitude DOUBLE PRECISION;"))
@@ -144,10 +146,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configuración de CORS permitiendo dominios locales y producción (Vercel)
+# Configuración de CORS permitiendo dominios locales, producción (Vercel) y app Android (Capacitor)
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost",
+    "https://localhost",
+    "capacitor://localhost",
     "https://pet-connect-flame.vercel.app",
 ]
 
@@ -173,6 +178,7 @@ app.include_router(locations.router, prefix="/api/v1/locations", tags=["Ubicacio
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Pedidos"])
 app.include_router(contact.router, prefix="/api/v1/contact", tags=["Contacto"])
 app.include_router(reminders.router, prefix="/api/v1/reminders", tags=["Recordatorios"])
+app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notificaciones Móviles"])
 
 
 @app.get("/api/v1/health", tags=["Infraestructura"])

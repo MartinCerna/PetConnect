@@ -1,13 +1,13 @@
 import uuid
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.db.models import User, Pet, Reminder
 from app.schemas.reminder import ReminderCreate, ReminderUpdate, ReminderResponse
 from app.api.deps import get_current_user
-from app.core.email import send_reminder_email
+from app.core.notifications import notify_reminder_created, notify_reminder_due
 
 router = APIRouter()
 
@@ -104,13 +104,12 @@ def list_reminders(
 @router.post("/", response_model=ReminderResponse, status_code=status.HTTP_201_CREATED)
 def create_reminder(
     reminder_in: ReminderCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
     Crea un nuevo recordatorio configurable (Medicamento, Vacunas/Desparasitaciones, Baños y Paseos)
-    y envía una notificación por correo al dueño de la mascota.
+    y registra la notificación para el teléfono del dueño de la mascota.
     """
     pet_name = "Tu mascota"
     # Si se asocia a una mascota, verificar que pertenezca al usuario
@@ -140,12 +139,12 @@ def create_reminder(
         resp.pet_name = reminder.pet.name
         pet_name = reminder.pet.name
 
-    # Enviar notificación por correo electrónico en segundo plano
-    if current_user.email:
-        background_tasks.add_task(
-            send_reminder_email,
-            recipient_email=current_user.email,
-            owner_name=current_user.full_name or "Dueño",
+    # Registrar y despachar notificación directa hacia el teléfono del usuario
+    try:
+        notify_reminder_created(
+            db=db,
+            user_id=current_user.id,
+            pet_id=reminder.pet_id,
             pet_name=pet_name,
             title=reminder.title,
             category=reminder.category,
@@ -153,6 +152,8 @@ def create_reminder(
             time_schedule=reminder.time_schedule,
             notes=reminder.notes,
         )
+    except Exception as exc:
+        print(f"[Reminders] Advertencia creando notificación móvil: {exc}", flush=True)
 
     return resp
 
@@ -164,20 +165,20 @@ def trigger_test_alert(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Dispara manualmente el envío inmediato de la alerta por correo electrónico
-    para probar la entrega y el formato de notificación.
+    Dispara manualmente el envío inmediato de la notificación al teléfono
+    para probar la alerta y el sonido en el dispositivo Android.
     """
     reminder = db.query(Reminder).filter(Reminder.id == reminder_id, Reminder.user_id == current_user.id).first()
     if not reminder:
         raise HTTPException(status_code=404, detail="Recordatorio no encontrado.")
 
     pet_name = reminder.pet.name if reminder.pet else "Tu mascota"
-    from app.core.email import send_reminder_due_alert_email
-
-    enviado = send_reminder_due_alert_email(
-        recipient_email=current_user.email,
-        owner_name=current_user.full_name or "Dueño",
+    notif = notify_reminder_due(
+        db=db,
+        user_id=current_user.id,
+        pet_id=reminder.pet_id,
         pet_name=pet_name,
+        reminder_id=reminder.id,
         title=reminder.title,
         category=reminder.category,
         frequency=reminder.frequency,
@@ -187,8 +188,8 @@ def trigger_test_alert(
 
     return {
         "status": "ok",
-        "email_sent": enviado,
-        "recipient": current_user.email,
+        "notification_sent": True,
+        "notification_id": str(notif.id),
         "reminder_title": reminder.title,
     }
 

@@ -38,6 +38,12 @@ class User(Base):
     devices = relationship(
         "Device", back_populates="owner", cascade="all, delete-orphan"
     )
+    notifications = relationship(
+        "AppNotification", back_populates="user", cascade="all, delete-orphan"
+    )
+    push_subscriptions = relationship(
+        "PushSubscription", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 # 2. Modelo de Dispositivo ESP32
@@ -206,3 +212,44 @@ class Reminder(Base):
 
     user = relationship("User", back_populates="reminders")
     pet = relationship("Pet", back_populates="reminders")
+
+
+# 10. Modelo de Notificaciones en Teléfono / App
+class AppNotification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    pet_id = Column(
+        UUID(as_uuid=True), ForeignKey("pets.id", ondelete="SET NULL"), nullable=True
+    )
+
+    type = Column(String(50), nullable=False)  # 'geofence_exit', 'reminder_due', 'reminder_created', 'test'
+    title = Column(String(250), nullable=False)
+    body = Column(Text, nullable=False)
+    data_json = Column(Text, nullable=True)
+    is_read = Column(Boolean, default=False)
+    delivered_mobile = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    user = relationship("User", back_populates="notifications")
+    pet = relationship("Pet")
+
+
+# 11. Modelo de Suscripciones Web Push (para notificaciones en segundo plano en Android PWA)
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    endpoint = Column(Text, unique=True, nullable=False)
+    p256dh = Column(String(255), nullable=False)
+    auth = Column(String(255), nullable=False)
+    user_agent = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    user = relationship("User", back_populates="push_subscriptions")

@@ -4,6 +4,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import {
+   getMobileNotificationPermissionState,
+   requestMobileNotificationPermission,
+   showPhoneNotification,
+   syncNativeReminderAlarms,
+} from '@/lib/mobileNotifications';
+import {
    Bell,
    Plus,
    Pill,
@@ -194,7 +200,10 @@ export default function RecordatoriosPage() {
    const [activeTab, setActiveTab] = useState<string>('todos');
    const [showModal, setShowModal] = useState(false);
    const [editingId, setEditingId] = useState<string | null>(null);
-   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+   const [notificationPermission, setNotificationPermission] = useState<
+      'granted' | 'denied' | 'default' | 'unsupported'
+   >('default');
+   const [phoneFeedback, setPhoneFeedback] = useState<string | null>(null);
 
    // Estado del formulario rediseñado
    const [petId, setPetId] = useState('');
@@ -210,27 +219,27 @@ export default function RecordatoriosPage() {
    const [dateRecurrence, setDateRecurrence] = useState<DateRecurrence>('Una sola vez');
    const [submitting, setSubmitting] = useState(false);
 
-   // Carga de permisos de notificación
+   // Carga de permisos de notificación en el teléfono
    useEffect(() => {
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-         setNotificationPermission(Notification.permission);
-      }
+      getMobileNotificationPermissionState().then(setNotificationPermission);
    }, []);
 
    const requestNotificationPermission = async () => {
-      if (typeof window === 'undefined' || !('Notification' in window)) {
-         alert('Tu navegador no soporta la API de notificaciones.');
-         return;
-      }
       try {
-         const perm = await Notification.requestPermission();
+         const perm = await requestMobileNotificationPermission();
          setNotificationPermission(perm);
          if (perm === 'granted') {
             playNotificationSound();
-            new Notification('🔔 PetConnect Recordatorios', {
-               body: '¡Notificaciones habilitadas! Recibirás recordatorios para tus mascotas.',
-               icon: '/favicon.ico',
+            await showPhoneNotification({
+               id: `reminders-enabled-${Date.now()}`,
+               title: '🔔 PetConnect Recordatorios',
+               body: '¡Notificaciones activadas en tu teléfono! Recibirás cada alerta puntual.',
+               type: 'test',
+               data: { target_url: '/dashboard/recordatorios' },
             });
+            await syncNativeReminderAlarms(reminders);
+         } else if (perm === 'denied') {
+            setPhoneFeedback('Permiso bloqueado. Activa las notificaciones de PetConnect en los ajustes de tu teléfono.');
          }
       } catch (err) {
          console.error('Error pidiendo permiso de notificación:', err);
@@ -255,6 +264,13 @@ export default function RecordatoriosPage() {
    useEffect(() => {
       loadReminders();
    }, [loadReminders]);
+
+   // Sincroniza alarmas locales nativas en Android cuando cambian los recordatorios
+   useEffect(() => {
+      if (!loading) {
+         syncNativeReminderAlarms(reminders);
+      }
+   }, [reminders, loading]);
 
    useEffect(() => {
       if (userPets && userPets.length > 0 && !petId) {
@@ -487,15 +503,13 @@ export default function RecordatoriosPage() {
             resetForm('medicamento');
 
             playNotificationSound();
-            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-               new Notification(
-                  `${editingId ? '✅ Recordatorio actualizado' : '✅ Recordatorio programado'}: ${saved.title}`,
-                  {
-                     body: `${saved.frequency || 'Configurado'} · ${saved.time_schedule || ''}`,
-                     icon: '/favicon.ico',
-                  }
-               );
-            }
+            await showPhoneNotification({
+               id: `saved-${saved.id}`,
+               title: `${editingId ? '✅ Recordatorio actualizado' : '✅ Recordatorio programado'}: ${saved.title}`,
+               body: `${saved.frequency || 'Configurado'} · ${saved.time_schedule || ''}`,
+               type: 'reminder_created',
+               data: { reminder_id: saved.id, target_url: '/dashboard/recordatorios' },
+            });
          } else {
             alert('No se pudo guardar el recordatorio.');
          }
@@ -506,35 +520,29 @@ export default function RecordatoriosPage() {
       }
    };
 
-   // Probar notificación y despacho de correo de prueba
+   // Probar notificación directa al teléfono
    const handleTestNotification = async (item: ReminderItem) => {
       playNotificationSound();
-      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-         new Notification('Hora de recordatorio: ' + item.title, {
-            body: 'Mascota: ' + (item.pet_name || 'Tu compañero') + ' - Horario: ' + (item.time_schedule || 'Ahora'),
-            icon: '/favicon.ico',
-         });
+      if (notificationPermission !== 'granted') {
+         const perm = await requestMobileNotificationPermission();
+         setNotificationPermission(perm);
       }
+
+      await showPhoneNotification({
+         id: `test-${item.id}-${Date.now()}`,
+         title: `🔔 Hora de: ${item.title}`,
+         body: `Mascota: ${item.pet_name || 'Tu compañero'} · Horario: ${item.time_schedule || 'Ahora'}`,
+         type: 'reminder_due',
+         data: { reminder_id: item.id, target_url: '/dashboard/recordatorios' },
+      });
 
       try {
          const res = await apiFetch('/reminders/' + item.id + '/test-alert', {
             method: 'POST',
          });
          if (res.ok) {
-            const data = await res.json();
-            if (data.email_sent) {
-               alert(
-                  'Alerta disparada.\nSe ha enviado el correo de notificación a ' +
-                     data.recipient +
-                     '.\nRevisa tu bandeja de entrada o spam.'
-               );
-            } else {
-               alert(
-                  'Alerta local ejecutada.\nEl servidor intentó enviar el correo a ' +
-                     data.recipient +
-                     ', pero el servicio de correo aún no está listo o las credenciales no fueron aceptadas.'
-               );
-            }
+            setPhoneFeedback(`Notificación enviada directamente a tu teléfono para "${item.title}".`);
+            setTimeout(() => setPhoneFeedback(null), 5000);
          }
       } catch (err) {
          console.error('Error probando alerta:', err);
@@ -590,6 +598,23 @@ export default function RecordatoriosPage() {
                   </button>
                </div>
             </div>
+
+            {phoneFeedback && (
+               <div
+                  role="status"
+                  className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 shadow-xs"
+               >
+                  <span>📱 {phoneFeedback}</span>
+                  <button
+                     type="button"
+                     onClick={() => setPhoneFeedback(null)}
+                     className="text-emerald-600 hover:text-emerald-800 p-1"
+                     aria-label="Cerrar aviso"
+                  >
+                     <X className="w-4 h-4" />
+                  </button>
+               </div>
+            )}
 
             {/* Pestañas de Categorías */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -1179,7 +1204,7 @@ export default function RecordatoriosPage() {
 
                      <div className="flex items-center gap-2 p-2.5 bg-pink-50 border border-pink-100 rounded-xl text-xs text-pink-700">
                         <Bell className="w-4 h-4 text-pink-600 shrink-0" />
-                        <span>Recibirás un correo al guardar y otro en cada hora programada.</span>
+                        <span>Recibirás una notificación directa en tu teléfono al guardar y en cada hora programada.</span>
                      </div>
 
                      <div className="flex items-center justify-end gap-3 pt-3 border-t">

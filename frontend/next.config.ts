@@ -12,7 +12,11 @@ const nextConfig: NextConfig = {
   
   // Optimización estricta de headers y generación limpia de assets
   poweredByHeader: false,
-  
+
+  experimental: {
+    agentUpgrade: "security",
+  },
+
   turbopack: {
     rules: {
       "*.css": {

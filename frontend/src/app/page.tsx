@@ -1,13 +1,15 @@
 // src/app/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Navbar from '@/components/Navbar';
 import CartDrawer from '@/components/CartDrawer';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import ContactSection from '@/components/ContactSection';
+import { isStandaloneAppMode } from '@/lib/mobileNotifications';
 import { ShoppingCart, Bone, MapPin, Smartphone, CheckCircle } from 'lucide-react';
 
 interface ProductColor {
@@ -56,8 +58,40 @@ const STEPS = [
 ];
 
 export default function LandingPage() {
-  const { addToCart } = useAuth();
+  const router = useRouter();
+  const { addToCart, token, loading } = useAuth();
   const [selectedColor, setSelectedColor] = useState<ProductColor>(PRODUCT_COLORS[0]);
+  const [checkingAppMode, setCheckingAppMode] = useState(true);
+
+  useEffect(() => {
+    if (loading) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const wantsStore = params.get('tienda') === '1' || window.location.hash === '#productos';
+    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+    const appMode = isStandaloneAppMode();
+
+    // En modo App Android / PWA instalada (o móvil con sesión activa) abre directo en el Panel
+    if (!wantsStore && (appMode || (isMobileDevice && Boolean(token)))) {
+      router.replace(token ? '/dashboard' : '/login?next=/dashboard');
+      return;
+    }
+
+    setCheckingAppMode(false);
+  }, [loading, token, router]);
+
+  if (checkingAppMode) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center gap-3">
+        <div className="w-12 h-12 rounded-2xl bg-pink-600 text-white flex items-center justify-center text-2xl shadow-lg animate-pulse">
+          🐾
+        </div>
+        <p className="text-sm font-semibold text-neutral-500">Abriendo PetConnect...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-800">

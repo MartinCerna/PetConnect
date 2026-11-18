@@ -3,6 +3,11 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardNavbar from '@/components/DashboardNavbar';
+import MobileBottomNav from '@/components/MobileBottomNav';
+import {
+   NotificationCenterDrawer,
+   useMobileNotificationCenter,
+} from '@/components/NotificationCenter';
 import { useAuth } from '@/context/AuthContext';
 
 export default function DashboardLayout({
@@ -12,6 +17,7 @@ export default function DashboardLayout({
 }) {
    const { token, loading } = useAuth();
    const router = useRouter();
+   const notifCenter = useMobileNotificationCenter(Boolean(!loading && token));
 
    // Guardia de sesión: sin token se redirige al login
    useEffect(() => {
@@ -29,12 +35,40 @@ export default function DashboardLayout({
    return (
       <div className="h-screen bg-neutral-50 flex flex-col overflow-hidden">
          {/* Barra de navegación superior fija */}
-         <DashboardNavbar />
+         <DashboardNavbar
+            unreadCount={notifCenter.unreadCount}
+            onOpenNotifications={() => notifCenter.setIsOpen(true)}
+         />
 
-         {/* Contenedor principal que ocupa todo el espacio restante */}
-         <div className="flex flex-1 relative overflow-hidden">
-            <main className="flex-1 relative w-full h-full">{children}</main>
+         {/* Contenedor principal con margen inferior seguro en móvil para la barra de navegación */}
+         <div className="flex flex-1 relative overflow-hidden pb-16 md:pb-0">
+            <main className="flex-1 relative w-full h-full overflow-hidden">
+               {children}
+            </main>
          </div>
+
+         {/* Barra de navegación inferior estilo app Android */}
+         <MobileBottomNav
+            unreadCount={notifCenter.unreadCount}
+            onOpenNotifications={() => notifCenter.setIsOpen(true)}
+         />
+
+         {/* Centro de notificaciones del teléfono */}
+         <NotificationCenterDrawer
+            isOpen={notifCenter.isOpen}
+            onClose={() => notifCenter.setIsOpen(false)}
+            notifications={notifCenter.notifications}
+            unreadCount={notifCenter.unreadCount}
+            loading={notifCenter.loading}
+            permissionState={notifCenter.permissionState}
+            testing={notifCenter.testing}
+            onEnablePhone={notifCenter.enablePhoneNotifications}
+            onSendTest={notifCenter.sendTestNotification}
+            onMarkAsRead={notifCenter.markAsRead}
+            onMarkAllRead={notifCenter.markAllRead}
+            onDeleteOne={notifCenter.deleteOne}
+            onClearAll={notifCenter.clearAll}
+         />
       </div>
    );
 }
