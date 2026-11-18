@@ -52,17 +52,24 @@ def get_next_eids(eik: bytes, pair_date: int, start_date: int, duration_seconds:
     start_offset = start_date - pair_date
     current_time_offset = start_offset - (start_offset % ROTATION_PERIOD)
 
-    static_eid = generate_eid(eik, 0)
+    # Precomputa los 6 slots EID (0..5) usados para codificar batería por BLE:
+    # Slot 0 (80-100%), Slot 1 (60-79%), Slot 2 (30-59%),
+    # Slot 3 (16-29%), Slot 4 (<=15% crítica), Slot 5 (Cargando).
+    battery_slot_eids = [generate_eid(eik, slot * ROTATION_PERIOD)[:10] for slot in range(6)]
+    step_idx = 0
 
     while current_time_offset <= start_offset + duration_seconds:
-        time = pair_date + current_time_offset
+        time_sec = pair_date + current_time_offset
 
         info = PublicKeyIdList.PublicKeyIdInfo()
-        info.timestamp.seconds = time
-        info.publicKeyId.truncatedEid = static_eid[:10]
+        info.timestamp.seconds = time_sec
+        # Alterna dando presencia doble al Slot 0 (nominal) y cubriendo todos los slots 1..5
+        slot_order = (0, 1, 2, 3, 4, 5, 0)
+        info.publicKeyId.truncatedEid = battery_slot_eids[slot_order[step_idx % len(slot_order)]]
 
         public_key_id_list.append(info)
 
-        current_time_offset += 1024
+        current_time_offset += ROTATION_PERIOD
+        step_idx += 1
 
     return public_key_id_list

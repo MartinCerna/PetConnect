@@ -113,8 +113,30 @@ def record_location(
         else (device.battery_level if device.battery_level is not None else 100)
     )
     if location_in.battery_level is not None:
+        prev_level = device.battery_level
+        was_low = prev_level is not None and prev_level <= 15
         device.battery_level = location_in.battery_level
+        if location_in.battery_voltage is not None:
+            device.battery_voltage = round(float(location_in.battery_voltage), 2)
+        if location_in.is_charging is not None:
+            device.is_charging = bool(location_in.is_charging)
         device.battery_updated_at = datetime.now(timezone.utc)
+
+        if location_in.battery_level <= 15 and not device.is_charging and not was_low:
+            try:
+                from app.core.notifications import notify_low_battery
+                pet_linked = db.query(Pet).filter(Pet.device_id == device.id).first()
+                notify_low_battery(
+                    db=db,
+                    user_id=device.user_id,
+                    pet_id=pet_linked.id if pet_linked else None,
+                    pet_name=pet_linked.name if pet_linked else f"Tag {device.device_mac}",
+                    device_mac=device.device_mac,
+                    battery_level=location_in.battery_level,
+                    battery_voltage=device.battery_voltage,
+                )
+            except Exception as batt_err:
+                print(f"[Battery] Error enviando alerta de batería baja en ingest: {batt_err}", flush=True)
 
     new_location = LocationLog(
         device_id=device.id,

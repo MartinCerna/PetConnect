@@ -13,13 +13,53 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
+MCU_BATTERY_SLOTS = {
+    0: {"battery_level": 95, "battery_voltage": 4.12, "is_charging": False, "label": "Optima (80-100%)"},
+    1: {"battery_level": 70, "battery_voltage": 3.92, "is_charging": False, "label": "Buena (60-79%)"},
+    2: {"battery_level": 45, "battery_voltage": 3.80, "is_charging": False, "label": "Media (30-59%)"},
+    3: {"battery_level": 22, "battery_voltage": 3.68, "is_charging": False, "label": "Baja (16-29%)"},
+    4: {"battery_level": 10, "battery_voltage": 3.52, "is_charging": False, "label": "Critica (<=15%)"},
+    5: {"battery_level": 85, "battery_voltage": 4.18, "is_charging": True, "label": "Cargando"},
+}
+
+
+def decrypt_mcu_location_with_battery(
+    identity_key: bytes,
+    encrypted_location: bytes,
+    public_key_random: bytes,
+    fallback_offset: int,
+):
+    """
+    Intenta desencriptar un reporte FMDN probando los 6 slots EID de batería (offset = slot * 1024).
+    AES-EAX-256 valida el tag criptográfico de 16 bytes, identificando sin ambigüedad qué EID emitió el tag.
+    """
+    for slot, info in MCU_BATTERY_SLOTS.items():
+        try:
+            decrypted = decrypt(identity_key, encrypted_location, public_key_random, slot * 1024)
+            return decrypted, {"slot": slot, **info}
+        except Exception:
+            continue
+
+    decrypted = decrypt(identity_key, encrypted_location, public_key_random, fallback_offset)
+    return decrypted, None
+
+
+def enviar_a_petconnect(
+    latitude,
+    longitude,
+    altitude,
+    timestamp_str,
+    battery_level=None,
+    battery_voltage=None,
+    is_charging=None,
+    update_device_battery=True,
+):
     # 1. Intento directo en la base de datos de Supabase
     try:
         import sys
         sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
         from app.db.session import SessionLocal
-        from app.db.models import Device, LocationLog
+        from app.db.models import Device, LocationLog, Pet
 
         db = SessionLocal()
         device = db.query(Device).filter(Device.device_mac == "10:00:3B:AE:EC:A0").first()
@@ -51,15 +91,48 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
                 .first()
             )
 
+            eff_battery = (
+                battery_level
+                if battery_level is not None
+                else (device.battery_level if getattr(device, "battery_level", None) is not None else 100)
+            )
+
             log = LocationLog(
                 device_id=dev_id,
                 latitude=float(latitude),
                 longitude=float(longitude),
                 altitude=float(altitude) if altitude else 0.0,
-                battery_level=device.battery_level if getattr(device, "battery_level", None) is not None else 100,
+                battery_level=eff_battery,
                 recorded_at=dt,
             )
             db.add(log)
+
+            if battery_level is not None and update_device_battery:
+                prev_level = device.battery_level
+                was_low = prev_level is not None and prev_level <= 15
+                device.battery_level = int(battery_level)
+                if battery_voltage is not None:
+                    device.battery_voltage = round(float(battery_voltage), 2)
+                if is_charging is not None:
+                    device.is_charging = bool(is_charging)
+                device.battery_updated_at = datetime.datetime.now(datetime.timezone.utc)
+
+                if int(battery_level) <= 15 and not device.is_charging and not was_low:
+                    try:
+                        from app.core.notifications import notify_low_battery
+                        pet_linked = db.query(Pet).filter(Pet.device_id == dev_id).first()
+                        notify_low_battery(
+                            db=db,
+                            user_id=device.user_id,
+                            pet_id=pet_linked.id if pet_linked else None,
+                            pet_name=pet_linked.name if pet_linked else f"Tag {dev_mac}",
+                            device_mac=dev_mac,
+                            battery_level=int(battery_level),
+                            battery_voltage=device.battery_voltage,
+                        )
+                    except Exception as batt_err:
+                        print(f" => Advertencia enviando alerta de batería baja: {batt_err}")
+
             db.commit()
 
             try:
@@ -80,7 +153,7 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
                 print(f" => Advertencia evaluando Zona Segura: {geo_err}")
 
             db.close()
-            print(f" => Coordenada guardada en BD Supabase para {dev_mac} ({dev_id}).")
+            print(f" => Coordenada y batería ({eff_battery}%) guardadas en BD Supabase para {dev_mac} ({dev_id}).")
             return
     except Exception as e:
         print(f" => Inserción directa en BD omitida: {e}")
@@ -96,6 +169,12 @@ def enviar_a_petconnect(latitude, longitude, altitude, timestamp_str):
         "altitude": float(altitude) if altitude else 0.0,
         "recorded_at": timestamp_str,
     }
+    if battery_level is not None and update_device_battery:
+        payload["battery_level"] = int(battery_level)
+        if battery_voltage is not None:
+            payload["battery_voltage"] = round(float(battery_voltage), 2)
+        if is_charging is not None:
+            payload["is_charging"] = bool(is_charging)
     try:
         headers = {"X-API-Key": os.getenv("INGEST_API_KEY", "439c026bfaed8175")}
         response = requests.post(url, json=payload, headers=headers, timeout=10)
@@ -208,12 +287,21 @@ def decrypt_location_response_locations(device_update_protobuf):
             encrypted_location = loc.geoLocation.encryptedReport.encryptedLocation
             public_key_random = loc.geoLocation.encryptedReport.publicKeyRandom
 
+            batt_info = None
             if public_key_random == b"":  # Own Report
                 identity_key_hash = hashlib.sha256(identity_key).digest()
                 decrypted_location = decrypt_aes_gcm(identity_key_hash, encrypted_location)
+            elif is_mcu:
+                decrypted_location, batt_info = decrypt_mcu_location_with_battery(
+                    identity_key,
+                    encrypted_location,
+                    public_key_random,
+                    loc.geoLocation.deviceTimeOffset,
+                )
             else:
-                time_offset = 0 if is_mcu else loc.geoLocation.deviceTimeOffset
-                decrypted_location = decrypt(identity_key, encrypted_location, public_key_random, time_offset)
+                decrypted_location = decrypt(
+                    identity_key, encrypted_location, public_key_random, loc.geoLocation.deviceTimeOffset
+                )
 
             wrapped_location = WrappedLocation(
                 decrypted_location=decrypted_location,
@@ -221,7 +309,11 @@ def decrypt_location_response_locations(device_update_protobuf):
                 accuracy=loc.geoLocation.accuracy,
                 status=loc.status,
                 is_own_report=loc.geoLocation.encryptedReport.isOwnReport,
-                name=""
+                name="",
+                battery_level=batt_info["battery_level"] if batt_info else None,
+                battery_voltage=batt_info["battery_voltage"] if batt_info else None,
+                is_charging=batt_info["is_charging"] if batt_info else None,
+                battery_slot=batt_info["slot"] if batt_info else None,
             )
             location_time_array.append(wrapped_location)
 
@@ -235,39 +327,67 @@ def decrypt_location_response_locations(device_update_protobuf):
     # Procesar cronológicamente de más antigua a más reciente
     location_time_array.sort(key=lambda item: item.time)
 
+    # Si el collar multiplexa Slots 1..5 junto con Slot 0 en la misma ventana (< 10 min),
+    # damos prioridad al Slot 1..5 más reciente para no sobreescribir el nivel real con 95%.
+    latest_non_zero_slot_time = max(
+        (item.time for item in location_time_array if item.battery_slot is not None and item.battery_slot != 0),
+        default=None,
+    )
+    latest_geo_time = max(
+        (item.time for item in location_time_array if item.status != Common_pb2.Status.SEMANTIC),
+        default=None,
+    )
+
     for loc in location_time_array:
 
         if loc.status == Common_pb2.Status.SEMANTIC:
             print(f"Semantic Location: {loc.name}")
+            print(f"Time: {datetime.datetime.fromtimestamp(loc.time).strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"Status: {loc.status}")
+            print(f"Is Own Report: {loc.is_own_report}")
+            print("-" * 40)
+            continue
 
-        else:
-            proto_loc = DeviceUpdate_pb2.Location()
-            proto_loc.ParseFromString(loc.decrypted_location)
+        proto_loc = DeviceUpdate_pb2.Location()
+        proto_loc.ParseFromString(loc.decrypted_location)
 
-            latitude = proto_loc.latitude / 1e7
-            longitude = proto_loc.longitude / 1e7
-            altitude = proto_loc.altitude
+        latitude = proto_loc.latitude / 1e7
+        longitude = proto_loc.longitude / 1e7
+        altitude = proto_loc.altitude
 
-            print(f"Latitude: {latitude}")
-            print(f"Longitude: {longitude}")
-            print(f"Altitude: {altitude}")
-            print(f"Google Maps Link: {create_google_maps_link(latitude, longitude)}")
-            
+        print(f"Latitude: {latitude}")
+        print(f"Longitude: {longitude}")
+        print(f"Altitude: {altitude}")
+        print(f"Google Maps Link: {create_google_maps_link(latitude, longitude)}")
+        if loc.battery_slot is not None:
+            print(
+                f"Battery (BLE Slot {loc.battery_slot}): {loc.battery_level}% "
+                f"({loc.battery_voltage:.2f} V, charging={loc.is_charging})"
+            )
         print(f"Time: {datetime.datetime.fromtimestamp(loc.time).strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"Status: {loc.status}")
         print(f"Is Own Report: {loc.is_own_report}")
         print("-" * 40)
-        #################
-        # --- NUEVA LÍNEA PARA ENVIAR DATOS A PETCONNECT ---
+
+        is_latest_geo = (latest_geo_time is None) or (loc.time >= latest_geo_time)
+        suppressed_by_multiplex = (
+            loc.battery_slot == 0
+            and latest_non_zero_slot_time is not None
+            and abs(loc.time - latest_non_zero_slot_time) <= 600
+        )
+        should_update_device_battery = is_latest_geo and not suppressed_by_multiplex
+
         dt_utc = datetime.datetime.fromtimestamp(loc.time, tz=datetime.timezone.utc)
         enviar_a_petconnect(
-            latitude=latitude, 
-            longitude=longitude, 
-            altitude=altitude, 
-            timestamp_str=dt_utc.isoformat()
+            latitude=latitude,
+            longitude=longitude,
+            altitude=altitude,
+            timestamp_str=dt_utc.isoformat(),
+            battery_level=loc.battery_level if not suppressed_by_multiplex else None,
+            battery_voltage=loc.battery_voltage if not suppressed_by_multiplex else None,
+            is_charging=loc.is_charging if not suppressed_by_multiplex else None,
+            update_device_battery=should_update_device_battery,
         )
-        #######################
-    pass
 
 
 if __name__ == '__main__':

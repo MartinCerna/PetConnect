@@ -79,9 +79,22 @@
 #define BATTERY_REPORT_INTERVAL_SEC 300                 // Envio HTTP cada 5 min (o al cambiar >=3%)
 
 // ============================================================================
-// CLAVE EID DE GOOGLE FIND MY DEVICE NETWORK (FMDN)
+// CLAVES MULTI-EID DE GOOGLE FIND MY DEVICE NETWORK (FMDN) POR NIVEL DE BATERÍA
 // ============================================================================
-const char *eid_string = "1e01e0b2417c236b49a9cd2826d0b0abd74b8304";
+// Cada slot corresponde a un EID valido derivado de la misma identity_key del
+// dispositivo para transmitir el nivel de bateria 100% por BLE sin Wi-Fi:
+//   Slot 0: 80-100% (Optima / base) | Slot 1: 60-79% (Buena) | Slot 2: 30-59% (Media)
+//   Slot 3: 16-29%  (Baja)          | Slot 4: <=15%  (Critica)| Slot 5: Cargando
+static const char *BATTERY_EIDS[6] = {
+    "1e01e0b2417c236b49a9cd2826d0b0abd74b8304",
+    "017e922cd20d0a3a942445cfe83c6386a46f3d02",
+    "3c1ad33b1fffbd8f1f63d4d41ef6b475ab5f8e30",
+    "329758c365c21d873e150ef27d73f178ca4502b2",
+    "4e6a83265a79404f60723c8614fea6f06bc41baf",
+    "36ecb2effe665da724297d1c71ed9e8b083c22f9",
+};
+static uint8_t s_battery_eid_bytes[6][20];
+static int s_active_eid_slot = 0;
 
 // Find My Device Network (FMDN) advertisement
 // Octet    Value           Description
@@ -345,9 +358,17 @@ static void ble_start_advertising(uint8_t *data, size_t data_len, uint16_t itvl_
         .itvl_max = itvl_units,
     };
 
-    ble_gap_adv_set_data(data, data_len);
-    ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER, &adv_params, ble_advertise_cb, NULL);
-    ESP_LOGI(TAG, "BLE FMDN advertising activo (intervalo: %u ms)", (unsigned int)((itvl_units * 625U) / 1000U));
+    int rc = ble_gap_adv_set_data(data, data_len);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "Error configurando payload FMDN BLE (rc=%d)", rc);
+    }
+    rc = ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER, &adv_params, ble_advertise_cb, NULL);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "Error iniciando advertising FMDN BLE (rc=%d)", rc);
+    } else {
+        ESP_LOGI(TAG, "BLE FMDN advertising activo (Slot EID #%d | intervalo: %u ms)",
+                 s_active_eid_slot, (unsigned int)((itvl_units * 625U) / 1000U));
+    }
 }
 
 static void ble_host_task(void *param) {
@@ -365,7 +386,33 @@ static void on_sync(void) {
 }
 #endif
 
-static void update_fmdn_battery_state(int pct) {
+static int select_battery_eid_slot(int pct, bool is_charging, bool divider_connected) {
+    if (!divider_connected) {
+        return 0;
+    }
+    if (is_charging) {
+        return 5;
+    }
+    if (pct >= 80) {
+        return 0;
+    }
+    if (pct >= 60) {
+        return 1;
+    }
+    if (pct >= 30) {
+        return 2;
+    }
+    if (pct >= 16) {
+        return 3;
+    }
+    return 4;
+}
+
+static void update_fmdn_battery_state(int pct, int tx_slot) {
+    if (tx_slot < 0 || tx_slot >= 6) {
+        tx_slot = 0;
+    }
+
     // Byte 28 (hashed_flags) bits 6..5 segun especificacion Google FMDN:
     // 0b01 (0x20) = Normal, 0b10 (0x40) = Baja, 0b11 (0x60) = Critica
     uint8_t batt_bits = 0x20;
@@ -382,13 +429,19 @@ static void update_fmdn_battery_state(int pct) {
 
     uint8_t updated_byte = (adv_raw_data[28] & (uint8_t)~0x60) | batt_bits;
     bool flags_changed = (updated_byte != adv_raw_data[28]);
+    bool slot_changed = (tx_slot != s_active_eid_slot);
     bool profile_changed = (next_profile != s_ble_power_profile);
 
-    if (!flags_changed && !profile_changed) {
+    if (!flags_changed && !slot_changed && !profile_changed) {
         return;
     }
 
     adv_raw_data[28] = updated_byte;
+    if (slot_changed) {
+        memcpy(&adv_raw_data[8], s_battery_eid_bytes[tx_slot], 20);
+        s_active_eid_slot = tx_slot;
+        ESP_LOGI(TAG, "[FMDN-BLE] Cambiando anuncio EID a Slot #%d", tx_slot);
+    }
 
     if (profile_changed) {
         s_ble_power_profile = next_profile;
@@ -553,33 +606,48 @@ static void battery_monitor_task(void *param) {
     int last_sent_pct = -1;
     bool last_sent_charging = false;
     TickType_t last_attempt_tick = 0;
+    uint32_t cycle_count = 0;
 
     while (1) {
         float voltage_v = read_battery_voltage_v();
-        int pct = lipo_voltage_to_percentage(voltage_v);
-        bool is_charging = (gpio_get_level(BATTERY_CHRG_GPIO) == 0);
+        bool divider_connected = (voltage_v >= 1.00f);
+        int effective_pct = divider_connected ? lipo_voltage_to_percentage(voltage_v) : 100;
+        bool is_charging = divider_connected && (gpio_get_level(BATTERY_CHRG_GPIO) == 0);
 
-        ESP_LOGI(TAG, "[BATERIA] Voltaje: %.2f V | Nivel: %d%% | Color: %s | Cargando: %s",
-                 voltage_v, pct, battery_color_label(pct, is_charging),
+        int target_slot = select_battery_eid_slot(effective_pct, is_charging, divider_connected);
+        // Multiplexacion segura: 2 ciclos con el EID del nivel de bateria + 1 ciclo con el EID base Slot 0
+        int tx_slot = target_slot;
+        if (target_slot != 0 && (cycle_count % 3U) == 2U) {
+            tx_slot = 0;
+        }
+
+        update_fmdn_battery_state(effective_pct, tx_slot);
+
+        if (!divider_connected) {
+            ESP_LOGW(TAG, "[BATERIA] Divisor ADC no detectado en GPIO4 (%.2f V) -> Usando Slot 0 (100%% nominal)",
+                     voltage_v);
+        }
+        ESP_LOGI(TAG, "[FMDN-BLE] Anuncio Google Find My activo | Slot EID #%d | Voltaje: %.2f V | Nivel: %d%% | Color: %s | Cargando: %s",
+                 tx_slot, voltage_v, effective_pct,
+                 battery_color_label(effective_pct, is_charging),
                  is_charging ? "SI" : "NO");
-
-        update_fmdn_battery_state(pct);
 
         TickType_t now = xTaskGetTickCount();
         bool interval_elapsed = (last_attempt_tick == 0) ||
             ((now - last_attempt_tick) >= pdMS_TO_TICKS((uint32_t)BATTERY_REPORT_INTERVAL_SEC * 1000U));
         bool significant_change = (last_sent_pct < 0) ||
-            (abs(pct - last_sent_pct) >= 3) ||
+            (abs(effective_pct - last_sent_pct) >= 3) ||
             (is_charging != last_sent_charging);
 
-        if (s_wifi_enabled && (interval_elapsed || significant_change)) {
+        if (s_wifi_enabled && divider_connected && (interval_elapsed || significant_change)) {
             last_attempt_tick = now;
-            if (send_battery_to_petconnect(pct, voltage_v, is_charging)) {
-                last_sent_pct = pct;
+            if (send_battery_to_petconnect(effective_pct, voltage_v, is_charging)) {
+                last_sent_pct = effective_pct;
                 last_sent_charging = is_charging;
             }
         }
 
+        cycle_count++;
         vTaskDelay(pdMS_TO_TICKS((uint32_t)BATTERY_READ_INTERVAL_SEC * 1000U));
     }
 }
@@ -613,10 +681,11 @@ void app_main(void) {
     resolve_device_mac();
     battery_adc_init();
 
-    // 20-byte ephemeral identifier
-    uint8_t eid_bytes[20];
-    hex_string_to_bytes(eid_string, eid_bytes, 20);
-    memcpy(&adv_raw_data[8], eid_bytes, 20);
+    // Decodificar los 6 EIDs de bateria (Slots 0..5) y arrancar con Slot 0
+    for (int s = 0; s < 6; s++) {
+        hex_string_to_bytes(BATTERY_EIDS[s], s_battery_eid_bytes[s], 20);
+    }
+    memcpy(&adv_raw_data[8], s_battery_eid_bytes[0], 20);
 
     #if defined(CONFIG_IDF_TARGET_ESP32C3)
         ESP_LOGI(TAG, "Initializing BLE (ESP32-C3 NimBLE)");

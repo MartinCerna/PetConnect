@@ -64,9 +64,11 @@ Currently known working devices include the ESP32 (Dev Module V1), the ESP32-CAM
    - Conecta el cátodo (`raya`) del diodo `1N4148` al **pin 7 (`CHRG`) del chip TP4056** (o unión del LED rojo de carga que va a GND cuando carga) y el ánodo del diodo a **`GPIO3`** del ESP32-C3.
    - El firmware activa resistencia pull-up interna en `GPIO3`, y el diodo bloquea cualquier retorno de `5 V` cuando el cargador no está cargando.
 
-### 3. Configuración en [`main.c`](main/main.c)
-Antes de compilar y flashear, edita estas constantes al inicio de [`main/main.c`](main/main.c):
-- `WIFI_SSID` y `WIFI_PASS`: red Wi-Fi (2.4 GHz) para que el dispositivo envíe porcentaje, voltaje y estado de carga a `POST /api/v1/devices/battery`.
+### 3. Telemetría de Batería 100% por BLE a distancia (Multi-EID) y configuración en [`main.c`](main/main.c)
+El ESP32-C3 envía su nivel de batería **directamente por la red Bluetooth de Google Find My (sin necesidad de Wi-Fi)** alternando 6 claves EID válidas derivadas de la misma llave de identidad (`Slot 0` a `Slot 5` según porcentaje y estado de carga). Al recibir un reporte de ubicación en el servidor, PetConnect identifica qué `Slot` descifró el paquete y actualiza el porcentaje y color en la web/app automáticamente.
+
+De forma opcional, también puedes configurar estas constantes al inicio de [`main.c`](main/main.c):
+- `WIFI_SSID` y `WIFI_PASS`: opcionales (si deseas que además envíe voltaje exacto en voltios cuando esté cerca de tu red Wi-Fi 2.4 GHz; si quedan vacíos `""`, trabaja **100% por BLE**).
 - `PETCONNECT_BATTERY_URL`: URL de tu API (`https://petconnect-2bh3.onrender.com/api/v1/devices/battery` o tu backend local).
 - `PETCONNECT_INGEST_API_KEY`: debe coincidir con `INGEST_API_KEY` de tu backend.
 - `DEVICE_MAC_OVERRIDE`: opcional si en PetConnect registraste otra dirección MAC distinta a la MAC BLE del chip.
