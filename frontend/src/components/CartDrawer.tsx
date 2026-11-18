@@ -24,7 +24,7 @@ export default function CartDrawer() {
 
    return (
       <div
-         className="fixed inset-0 z-50 flex justify-end bg-neutral-950/40 backdrop-blur-sm"
+         className="fixed inset-0 z-[75] flex justify-end bg-neutral-950/40 backdrop-blur-sm"
          onClick={() => setIsCartOpen(false)}
       >
          <div
@@ -48,9 +48,21 @@ export default function CartDrawer() {
 
                <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto">
                   {cart.length === 0 ? (
-                     <p className="text-center text-neutral-400 py-8 text-sm">
-                        Tu carrito está vacío. Agrega un PetConnect Tag.
-                     </p>
+                     <div className="text-center py-8 space-y-3">
+                        <p className="text-neutral-400 text-sm">
+                           Tu carrito está vacío. Agrega un PetConnect Tag.
+                        </p>
+                        <button
+                           type="button"
+                           onClick={() => {
+                              setIsCartOpen(false);
+                              router.push('/dashboard/dispositivos#comprar-tag');
+                           }}
+                           className="inline-flex items-center justify-center px-4 py-2.5 bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200 rounded-xl text-xs font-bold transition"
+                        >
+                           Elegir color y agregar PetConnect Tag
+                        </button>
+                     </div>
                   ) : (
                      cart.map((item) => (
                         <div

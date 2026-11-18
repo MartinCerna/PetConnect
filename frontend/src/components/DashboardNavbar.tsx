@@ -29,9 +29,10 @@ export default function DashboardNavbar({
    unreadCount = 0,
    onOpenNotifications,
 }: DashboardNavbarProps) {
-   const { logout, user } = useAuth();
+   const { logout, user, cart, setIsCartOpen } = useAuth();
    const router = useRouter();
    const pathname = usePathname();
+   const totalCartItems = (cart || []).reduce((acc, item) => acc + (item.quantity || 1), 0);
 
    const [isAppMode, setIsAppMode] = useState(true);
    const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -133,13 +134,43 @@ export default function DashboardNavbar({
                         </button>
                      )}
 
-                     <Link
-                        href="/?tienda=1#productos"
+                     <button
+                        type="button"
+                        onClick={() => {
+                           if (totalCartItems > 0) {
+                              setIsCartOpen(true);
+                           } else {
+                              router.push('/dashboard/dispositivos#comprar-tag');
+                           }
+                        }}
+                        className="lg:hidden relative p-2 rounded-xl bg-pink-50 hover:bg-pink-100 text-pink-600 transition-colors"
+                        title="Comprar collar o ver carrito"
+                        aria-label="Comprar collar o ver carrito"
+                     >
+                        <ShoppingCart className="w-5 h-5" />
+                        {totalCartItems > 0 && (
+                           <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-pink-600 text-white text-[10px] font-extrabold flex items-center justify-center shadow-sm">
+                              {totalCartItems > 9 ? '9+' : totalCartItems}
+                           </span>
+                        )}
+                     </button>
+
+                     <button
+                        type="button"
+                        onClick={() => {
+                           if (totalCartItems > 0) {
+                              setIsCartOpen(true);
+                           } else {
+                              router.push('/dashboard/dispositivos#comprar-tag');
+                           }
+                        }}
                         className="hidden lg:flex items-center gap-2 text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 px-3.5 py-2 rounded-xl shadow-sm transition-all"
                      >
                         <ShoppingCart className="w-4 h-4" />
-                        <span>Comprar Tag</span>
-                     </Link>
+                        <span>
+                           {totalCartItems > 0 ? `Carrito (${totalCartItems})` : 'Comprar Tag'}
+                        </span>
+                     </button>
 
                      <div className="h-6 w-px bg-neutral-200 hidden sm:block"></div>
 

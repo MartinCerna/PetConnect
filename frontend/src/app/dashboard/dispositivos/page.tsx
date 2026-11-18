@@ -2,9 +2,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch, errorMessage } from '@/lib/api';
-import { Cpu, Link as LinkIcon, Trash2 } from 'lucide-react';
+import {
+   Cpu,
+   Link as LinkIcon,
+   Minus,
+   Plus,
+   ShoppingBag,
+   ShoppingCart,
+   Sparkles,
+   Trash2,
+} from 'lucide-react';
+
+interface ProductColor {
+   id: string;
+   name: string;
+   hex: string;
+}
+
+const PRODUCT_COLORS: ProductColor[] = [
+   { id: 'rosado', name: 'Rosado', hex: '#ec4899' },
+   { id: 'celeste', name: 'Celeste', hex: '#38bdf8' },
+   { id: 'negro', name: 'Negro', hex: '#171717' },
+   { id: 'verde', name: 'Verde', hex: '#22c55e' },
+   { id: 'rojo', name: 'Rojo', hex: '#ef4444' },
+];
+
+const TAG_PRICE = 109.99;
 
 interface DeviceItem {
    id: string;
@@ -15,7 +42,8 @@ interface DeviceItem {
 }
 
 export default function DispositivosPage() {
-   const { userPets, loadUserData, token } = useAuth();
+   const router = useRouter();
+   const { userPets, loadUserData, token, addToCart, setIsCartOpen } = useAuth();
    const [devices, setDevices] = useState<DeviceItem[]>([]);
    const [loading, setLoading] = useState(true);
    const [mac, setMac] = useState('');
@@ -23,6 +51,8 @@ export default function DispositivosPage() {
    const [registering, setRegistering] = useState(false);
    const [error, setError] = useState('');
    const [successMsg, setSuccessMsg] = useState('');
+   const [selectedColor, setSelectedColor] = useState<ProductColor>(PRODUCT_COLORS[0]);
+   const [quantity, setQuantity] = useState(1);
 
    const fetchDevices = async () => {
       try {
@@ -130,14 +160,39 @@ export default function DispositivosPage() {
       }
    };
 
+   const handleAddTagToCart = (goToCheckout = false) => {
+      addToCart({
+         id: `tag-bone-01-${selectedColor.id}`,
+         name: `PetConnect Tag (${selectedColor.name})`,
+         price: TAG_PRICE,
+         quantity,
+         color: selectedColor.name,
+         image: '/images/product.png',
+      });
+      if (goToCheckout) {
+         setIsCartOpen(false);
+         router.push('/checkout');
+      }
+   };
+
    return (
-      <div className="p-6 max-w-5xl mx-auto space-y-8">
-         <div>
-            <h1 className="text-2xl font-bold text-neutral-900">Mis Dispositivos ESP32</h1>
-            <p className="text-sm text-neutral-500">
-               Administra tus tags PetConnect y asócialos a tus mascotas.
-            </p>
-         </div>
+      <div className="h-full overflow-y-auto bg-neutral-100/60 p-4 sm:p-6 lg:p-8">
+         <div className="max-w-5xl mx-auto space-y-8 pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+               <div>
+                  <h1 className="text-2xl font-bold text-neutral-900">Mis Dispositivos ESP32</h1>
+                  <p className="text-sm text-neutral-500">
+                     Administra tus tags PetConnect, asócialos a tus mascotas o pide uno nuevo.
+                  </p>
+               </div>
+               <a
+                  href="#comprar-tag"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200 rounded-xl text-xs font-bold transition shrink-0"
+               >
+                  <ShoppingBag className="w-4 h-4" />
+                  Adquirir Nuevo Tag
+               </a>
+            </div>
 
          {/* Formulario de registro de nuevo dispositivo */}
          <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm space-y-4">
@@ -275,6 +330,148 @@ export default function DispositivosPage() {
                   })}
                </div>
             )}
+         </div>
+
+         {/* Tienda Rápida Integrada dentro de la App */}
+         <section
+            id="comprar-tag"
+            className="bg-white rounded-3xl border border-pink-100 shadow-sm overflow-hidden scroll-mt-6"
+         >
+            <div className="bg-gradient-to-r from-pink-50 via-rose-50/70 to-sky-50/60 px-6 py-4 border-b border-pink-100 flex flex-wrap items-center justify-between gap-2">
+               <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-pink-600 text-white flex items-center justify-center shadow-sm">
+                     <ShoppingBag className="w-4 h-4" />
+                  </div>
+                  <div>
+                     <h2 className="text-base sm:text-lg font-extrabold text-neutral-900">
+                        Adquirir Nuevo PetConnect Tag
+                     </h2>
+                     <p className="text-xs text-neutral-500">
+                        ¿Adoptaste otra mascota o quieres otro color? Pídelo directo con Yape.
+                     </p>
+                  </div>
+               </div>
+               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white text-pink-700 border border-pink-200 text-[11px] font-bold">
+                  <Sparkles className="w-3 h-3" />
+                  Sin mensualidades
+               </span>
+            </div>
+
+            <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+               <div className="md:col-span-5">
+                  <div className="relative w-full aspect-[1024/622] rounded-2xl overflow-hidden bg-neutral-50 border border-neutral-200 shadow-inner">
+                     <Image
+                        src="/images/product.png"
+                        alt="Collar inteligente PetConnect Tag"
+                        fill
+                        sizes="(max-width: 768px) 100vw, 40vw"
+                        className="object-cover"
+                     />
+                  </div>
+               </div>
+
+               <div className="md:col-span-7 space-y-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                     <div>
+                        <h3 className="text-lg font-extrabold text-neutral-950">
+                           PetConnect Tag + Placa QR
+                        </h3>
+                        <p className="text-xs text-neutral-500 mt-0.5 leading-relaxed">
+                           Localizador inteligente resistente al agua con carcasa artesanal en forma de hueso, placa QR de emergencia y clip de sujeción rápida.
+                        </p>
+                     </div>
+                     <div className="text-right shrink-0">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
+                           Precio unitario
+                        </span>
+                        <span className="text-2xl font-black text-neutral-950">
+                           S/. {TAG_PRICE.toFixed(2)}
+                        </span>
+                     </div>
+                  </div>
+
+                  {/* Selector de color */}
+                  <div className="space-y-2">
+                     <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-neutral-700">
+                           Color seleccionado:{' '}
+                           <span className="text-pink-600">{selectedColor.name}</span>
+                        </span>
+                        <span className="text-[11px] text-neutral-400">5 colores disponibles</span>
+                     </div>
+                     <div className="flex flex-wrap items-center gap-2.5">
+                        {PRODUCT_COLORS.map((col) => {
+                           const isSelected = selectedColor.id === col.id;
+                           return (
+                              <button
+                                 key={col.id}
+                                 type="button"
+                                 onClick={() => setSelectedColor(col)}
+                                 aria-label={`Seleccionar color ${col.name}`}
+                                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                                    isSelected
+                                       ? 'border-pink-600 bg-pink-50 text-pink-800 shadow-xs'
+                                       : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50'
+                                 }`}
+                              >
+                                 <span
+                                    className="w-4 h-4 rounded-full border border-black/15"
+                                    style={{ backgroundColor: col.hex }}
+                                 />
+                                 <span>{col.name}</span>
+                              </button>
+                           );
+                        })}
+                     </div>
+                  </div>
+
+                  {/* Cantidad y botones de acción */}
+                  <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                     <div className="flex items-center justify-between sm:justify-start gap-2 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2">
+                        <span className="text-xs font-bold text-neutral-600 mr-1">Cantidad:</span>
+                        <button
+                           type="button"
+                           onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                           aria-label="Disminuir cantidad"
+                           className="w-7 h-7 rounded-lg bg-white border border-neutral-200 flex items-center justify-center text-neutral-700 hover:bg-neutral-100"
+                        >
+                           <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="w-6 text-center text-sm font-extrabold text-neutral-900">
+                           {quantity}
+                        </span>
+                        <button
+                           type="button"
+                           onClick={() => setQuantity((q) => Math.min(5, q + 1))}
+                           aria-label="Aumentar cantidad"
+                           className="w-7 h-7 rounded-lg bg-white border border-neutral-200 flex items-center justify-center text-neutral-700 hover:bg-neutral-100"
+                        >
+                           <Plus className="w-3.5 h-3.5" />
+                        </button>
+                     </div>
+
+                     <div className="flex-1 flex flex-col sm:flex-row gap-2">
+                        <button
+                           type="button"
+                           onClick={() => handleAddTagToCart(false)}
+                           className="flex-1 py-2.5 px-4 bg-white hover:bg-pink-50 text-pink-700 border border-pink-300 font-bold rounded-xl text-xs sm:text-sm transition flex items-center justify-center gap-1.5"
+                        >
+                           <ShoppingCart className="w-4 h-4" />
+                           + Agregar al Carrito
+                        </button>
+                        <button
+                           type="button"
+                           onClick={() => handleAddTagToCart(true)}
+                           className="flex-1 py-2.5 px-4 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-xl text-xs sm:text-sm transition shadow-md shadow-pink-200 flex items-center justify-center gap-1.5"
+                        >
+                           <ShoppingBag className="w-4 h-4" />
+                           Comprar con Yape · S/. {(TAG_PRICE * quantity).toFixed(2)}
+                        </button>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         </section>
          </div>
       </div>
    );

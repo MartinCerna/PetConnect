@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import DashboardNavbar from '@/components/DashboardNavbar';
 import MobileBottomNav from '@/components/MobileBottomNav';
+import CartDrawer from '@/components/CartDrawer';
 import {
    NotificationCenterDrawer,
    useMobileNotificationCenter,
@@ -69,6 +70,9 @@ export default function DashboardLayout({
             onDeleteOne={notifCenter.deleteOne}
             onClearAll={notifCenter.clearAll}
          />
+
+         {/* Carrito deslizable accesible dentro del panel y la app Android */}
+         <CartDrawer />
       </div>
    );
 }

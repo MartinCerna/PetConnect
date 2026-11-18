@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/context/AuthContext';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import RegisterPetModal from '@/components/RegisterPetModal';
 import { apiFetch } from '@/lib/api';
@@ -14,6 +15,7 @@ import {
    Check,
    ChevronDown,
    ChevronUp,
+   Cpu,
    Crosshair,
    Footprints,
    Home,
@@ -793,6 +795,16 @@ export default function DashboardPage() {
                               <span className="w-4 h-4 bg-white rounded-full shadow-sm" />
                            </span>
                         </button>
+
+                        {selectedPet && !selectedPet.device_id && (
+                           <Link
+                              href="/dashboard/dispositivos"
+                              className="w-full mb-2.5 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-semibold py-2 px-3 rounded-xl transition-colors text-xs flex items-center justify-center gap-1.5"
+                           >
+                              <Cpu className="w-3.5 h-3.5 shrink-0" />
+                              Vincular o Comprar Collar Tag
+                           </Link>
+                        )}
 
                         <button
                            onClick={() => setShowRegister(true)}

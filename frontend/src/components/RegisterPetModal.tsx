@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 
 export default function RegisterPetModal({
@@ -219,6 +220,19 @@ export default function RegisterPetModal({
                   {submitting ? 'Guardando...' : 'Guardar Mascota'}
                </button>
             </form>
+
+            <div className="pt-2 border-t border-neutral-100 text-center">
+               <p className="text-[11px] text-neutral-500">
+                  ¿Necesitas un collar adicional para tu nueva mascota?{' '}
+                  <Link
+                     href="/dashboard/dispositivos#comprar-tag"
+                     onClick={onClose}
+                     className="text-pink-600 font-bold hover:underline"
+                  >
+                     Adquirir PetConnect Tag →
+                  </Link>
+               </p>
+            </div>
          </div>
       </div>
    );
