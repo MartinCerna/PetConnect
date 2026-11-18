@@ -39,6 +39,8 @@ jobs:
 
       - name: Configurar Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Instalar dependencias de frontend
         working-directory: frontend
