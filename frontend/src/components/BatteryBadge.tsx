@@ -201,9 +201,7 @@ export default function BatteryBadge({
    if (variant === 'compact') {
       return (
          <div
-            title={`${title}: ${v.pct !== null ? `${v.pct}% (${v.label})` : v.label}${
-               v.voltageText ? ` · ${v.voltageText}` : ''
-            }`}
+            title={`${title}: ${v.pct !== null ? `${v.pct}% (${v.label})` : v.label}`}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold shadow-xs backdrop-blur-md transition-colors ${v.bgClass} ${v.borderClass} ${v.textClass} ${
                v.isCritical ? 'animate-pulse' : ''
             } ${className}`}
@@ -264,9 +262,13 @@ export default function BatteryBadge({
 
          <div className="mt-1.5 flex items-center justify-between text-[10px] text-neutral-500 font-medium">
             <span>
-               {v.voltageText
-                  ? `LiPo ${v.isEstimatedVoltage ? '~' : ''}${v.voltageText}`
-                  : 'Esperando lectura ADC'}
+               {v.pct === null
+                  ? 'Esperando lectura'
+                  : v.isCharging
+                    ? 'Conectado a corriente'
+                    : v.isCritical
+                      ? 'Recargar pronto'
+                      : 'Nivel de batería'}
             </span>
             <span>{formattedTime ? `Act: ${formattedTime}` : 'Estado en tiempo real'}</span>
          </div>

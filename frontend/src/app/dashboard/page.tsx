@@ -502,8 +502,7 @@ export default function DashboardPage() {
                               Batería crítica en el collar de {selectedPet.name}: {effectiveBatteryLevel}%
                            </p>
                            <p className="text-[11px] text-rose-100 truncate">
-                              {batteryVisuals.voltageText ? `Voltaje LiPo: ${batteryVisuals.voltageText} · ` : ''}
-                              Conecta el módulo de carga pronto.
+                              Conecta el collar al cargador pronto.
                            </p>
                         </div>
                      </div>

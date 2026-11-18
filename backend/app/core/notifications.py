@@ -258,10 +258,9 @@ def notify_low_battery(
     battery_voltage: Optional[float] = None,
 ) -> AppNotification:
     """Alerta al dueño cuando la batería del collar ESP32-C3 baja al umbral crítico (<= 15%)."""
-    voltage_text = f" ({battery_voltage:.2f} V)" if battery_voltage is not None else ""
     notif_title = f"🪫 Batería baja en el collar de {pet_name} ({battery_level}%)"
     notif_body = (
-        f"El tag {device_mac} está al {battery_level}%{voltage_text}. "
+        f"El tag {device_mac} está al {battery_level}%. "
         "Conéctalo al cargador para no perder el rastreo."
     )
 
